@@ -20,5 +20,6 @@ setup(
     author_email='EXT.JMARAZANO@cma-cgm.com',
     url='my.git.url',
     license=license,
-    packages=find_packages(exclude=('tests', 'docs'))
+    zip_safe=False,
+    packages=find_packages(exclude=('tests', 'docs', 'sample'))
 )
