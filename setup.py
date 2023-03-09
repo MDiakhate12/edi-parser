@@ -13,7 +13,7 @@ with open('LICENSE') as f:
 
 setup(
     name='Pre-processing-CICD',
-    version='1.0',
+    version='1',
     description='Project Pre-processing-CICD',
     long_description=readme,
     author='Joyce MARAZANO',
