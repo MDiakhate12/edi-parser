@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<udm.DeploymentPackage version="deployment_version-version_suffix" application="Digital_Lab/Optistow/Pre-processing-CICD">
+  <orchestrator />
+  <enableAutomaticOrchestrators>false</enableAutomaticOrchestrators>
+  <application />
+  <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
+  <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
+  <deployables>
+  <file.Folder name="Pre-processing-CICD" file="dist/PackageTozip/Package.zip">
+	  <tags>
+		<value>Pre-processing-CICD</value>
+	  </tags>
+	  <scanPlaceholders>true</scanPlaceholders>
+      <targetPath></targetPath>
+      <targetPathShared>false</targetPathShared>
+      <createTargetPath>false</createTargetPath>
+  </file.Folder>
+  </deployables>
+  <applicationDependencies />
+</udm.DeploymentPackage>
