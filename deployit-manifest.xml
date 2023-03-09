@@ -6,15 +6,19 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-  <file.Folder name="Pre-processing-CICD" file="dist/PackageTozip/Package.zip">
-	  <tags>
-		<value>Pre-processing-CICD</value>
-	  </tags>
-	  <scanPlaceholders>true</scanPlaceholders>
-      <targetPath></targetPath>
-      <targetPathShared>false</targetPathShared>
-      <createTargetPath>false</createTargetPath>
-  </file.Folder>
+    <aws.AwsLambdaPackageFile name="pre-processing-Optistow" file="code/pre-processing.zip">
+      <tags>
+        <value>pre-processing-Optistow</value>
+      </tags>
+      <scanPlaceholders>true</scanPlaceholders>
+      <preScannedPlaceholders>false</preScannedPlaceholders>
+      <placeholders />
+      <isRescanned>false</isRescanned>
+      <outputMap />
+      <projectId>${env.GITLAB_PROJECT_ID}</projectId>
+    </aws.AwsLambdaPackageFile>
   </deployables>
   <applicationDependencies />
 </udm.DeploymentPackage>
+
+

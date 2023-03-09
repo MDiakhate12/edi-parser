@@ -1,5 +1,7 @@
 pipelineType: python
 pipelineTypeVersion: 3
+provisioner : xldeploy
+packageAsZip : true
 
 ### Additional configuration is possible depending on the project requirements
 
