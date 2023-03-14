@@ -6,7 +6,7 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-    <aws.AwsLambdaPackageFile name="pre-processing-Optistow" file="dist/Pre-processing-CICD-1.zip">
+    <aws.AwsLambdaPackageFile name="pre-processing-Optistow" file="deployment_package_file">
       <tags>
         <value>pre-processing-Optistow</value>
       </tags>
