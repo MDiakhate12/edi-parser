@@ -2,6 +2,7 @@ pipelineType: python
 pipelineTypeVersion: 3
 provisioner : xldeploy
 packageAsZip : true
+runTests: false
 
 ### Additional configuration is possible depending on the project requirements
 
