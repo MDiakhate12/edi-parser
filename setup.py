@@ -21,6 +21,5 @@ setup(
     url='my.git.url',
     license=license,
     zip_safe=False,
-    packages=find_packages('test-zip'),
-    packages_dir  ={'': 'test-zip'}
+    packages=find_packages(exclude=('tests', 'docs', 'sample'))
 )
