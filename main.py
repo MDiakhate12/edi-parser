@@ -3,7 +3,8 @@ from boto3 import client
 import logging
 import json
 import os
-
+import sys
+sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.main_layer import MainLayer
 
 # logger = logging.getLogger(__name__)

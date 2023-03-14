@@ -20,6 +20,7 @@ from pandas import (
     date_range,
     option_context,
 )
+import pandas._testing as tm
 
 
 @pytest.fixture
@@ -29,6 +30,7 @@ def duplicate_columns_frame():
 
 
 def test_info_empty():
+    # GH #45494
     df = DataFrame()
     buf = StringIO()
     df.info(buf=buf)
@@ -37,7 +39,7 @@ def test_info_empty():
         """\
         <class 'pandas.core.frame.DataFrame'>
         Index: 0 entries
-        Empty DataFrame"""
+        Empty DataFrame\n"""
     )
     assert result == expected
 
@@ -387,7 +389,7 @@ def test_info_memory_usage_deep_not_pypy():
     assert df_object.memory_usage(deep=True).sum() > df_object.memory_usage().sum()
 
 
-@pytest.mark.skipif(not PYPY, reason="on PyPy deep=True does not change result")
+@pytest.mark.xfail(not PYPY, reason="on PyPy deep=True does not change result")
 def test_info_memory_usage_deep_pypy():
     df_with_object_index = DataFrame({"a": [1]}, index=["foo"])
     assert (
@@ -490,3 +492,12 @@ def test_info_int_columns():
         """
     )
     assert result == expected
+
+
+def test_memory_usage_empty_no_warning():
+    # GH#50066
+    df = DataFrame(index=["a", "b"])
+    with tm.assert_produces_warning(None):
+        result = df.memory_usage()
+    expected = Series(16 if IS64 else 8, index=["Index"])
+    tm.assert_series_equal(result, expected)
