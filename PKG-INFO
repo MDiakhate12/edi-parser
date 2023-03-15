@@ -1,0 +1,31 @@
+Metadata-Version: 2.1
+Name: Pre-processing-CICD
+Version: 1
+Summary: Project Pre-processing-CICD
+Home-page: my.git.url
+Author: Joyce MARAZANO
+Author-email: EXT.JMARAZANO@cma-cgm.com
+License:                                                                                                                                                                   
+                                                                                                                                                                          
+                CCCCCCCCCCCCCMMMMMMMM               MMMMMMMM               AAA                            CCCCCCCCCCCCC       GGGGGGGGGGGGGMMMMMMMM               MMMMMMMM
+             CCC::::::::::::CM:::::::M             M:::::::M              A:::A                        CCC::::::::::::C    GGG::::::::::::GM:::::::M             M:::::::M
+           CC:::::::::::::::CM::::::::M           M::::::::M             A:::::A                     CC:::::::::::::::C  GG:::::::::::::::GM::::::::M           M::::::::M
+          C:::::CCCCCCCC::::CM:::::::::M         M:::::::::M            A:::::::A                   C:::::CCCCCCCC::::C G:::::GGGGGGGG::::GM:::::::::M         M:::::::::M
+         C:::::C       CCCCCCM::::::::::M       M::::::::::M           A:::::::::A                 C:::::C       CCCCCCG:::::G       GGGGGGM::::::::::M       M::::::::::M
+        C:::::C              M:::::::::::M     M:::::::::::M          A:::::A:::::A               C:::::C             G:::::G              M:::::::::::M     M:::::::::::M
+        C:::::C              M:::::::M::::M   M::::M:::::::M         A:::::A A:::::A              C:::::C             G:::::G              M:::::::M::::M   M::::M:::::::M
+        C:::::C              M::::::M M::::M M::::M M::::::M        A:::::A   A:::::A             C:::::C             G:::::G    GGGGGGGGGGM::::::M M::::M M::::M M::::::M
+        C:::::C              M::::::M  M::::M::::M  M::::::M       A:::::A     A:::::A            C:::::C             G:::::G    G::::::::GM::::::M  M::::M::::M  M::::::M
+        C:::::C              M::::::M   M:::::::M   M::::::M      A:::::AAAAAAAAA:::::A           C:::::C             G:::::G    GGGGG::::GM::::::M   M:::::::M   M::::::M
+        C:::::C              M::::::M    M:::::M    M::::::M     A:::::::::::::::::::::A          C:::::C             G:::::G        G::::GM::::::M    M:::::M    M::::::M
+         C:::::C       CCCCCCM::::::M     MMMMM     M::::::M    A:::::AAAAAAAAAAAAA:::::A          C:::::C       CCCCCCG:::::G       G::::GM::::::M     MMMMM     M::::::M
+          C:::::CCCCCCCC::::CM::::::M               M::::::M   A:::::A             A:::::A          C:::::CCCCCCCC::::C G:::::GGGGGGGG::::GM::::::M               M::::::M
+           CC:::::::::::::::CM::::::M               M::::::M  A:::::A               A:::::A          CC:::::::::::::::C  GG:::::::::::::::GM::::::M               M::::::M
+             CCC::::::::::::CM::::::M               M::::::M A:::::A                 A:::::A           CCC::::::::::::C    GGG::::::GGG:::GM::::::M               M::::::M
+                CCCCCCCCCCCCCMMMMMMMM               MMMMMMMMAAAAAAA                   AAAAAAA             CCCCCCCCCCCCC       GGGGGG   GGGGMMMMMMMM               MMMMMMMM
+                                                                                                                                                                       
+Platform: UNKNOWN
+License-File: LICENSE
+
+Pre-processing code to be used in CI/CD
+
