@@ -44,7 +44,7 @@ class MainLayer():
         self.__init_file_paths_from_event(path, simulation_id)
 
         # Send items to dynamoDB :
-        self.__DL.write_records_dynamoDB(simulation_id, table_dynamoDB)
+        #self.__DL.write_records_dynamoDB(simulation_id, table_dynamoDB)
 
         # intialize anomaly detection
         self.__AL = AL()

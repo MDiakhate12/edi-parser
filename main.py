@@ -20,6 +20,13 @@ class CustomAdapter(logging.LoggerAdapter):
 def log_error(e: Exception, err_msg: str) -> None:
     logger.error(err_msg)
     logger.error(e, exc_info=True)
+
+def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynamoDB: str) -> None:
+        dynamodb = client('dynamodb')
+        dataBucketPath = "s3://" + bucket_data_name + "/data/simulations/" + SimulationId + "/intermediate/"
+
+        dynamodb.put_item(TableName=table_dynamoDB, Item={'SimulationId':{'S':SimulationId},'Document':{'S':dataBucketPath},'status':{'S':'pending'} })
+        logger.info("insert item on dynamoDB")
    
 def lambda_handler(event, context):
     global logger
@@ -40,7 +47,8 @@ def lambda_handler(event, context):
         main_layer = MainLayer(logger, event, reusePreviousResults, bucket_data_name, table_dynamoDB)
         main_layer.run_main()
         logger.info("Pre processing OK")
-        
+        simulation_id = event["simulation_id"]
+        write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB)
         status_code = 200
     
     except Exception as e:
