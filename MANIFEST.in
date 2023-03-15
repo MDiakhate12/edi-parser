@@ -6,9 +6,9 @@ include modules/*
 include numpy/*
 include numpy-1.24.2.dist-info/*
 include numpy.libs/*
-include pandas/*
-include pandas.libs/*
+include pandas/
 include pandas-1.5.3.dist-info/*
+include pandas.libs/*
 include python/*
 include python_dateutil-2.8.2.dist-info/*
 include pytz/*
