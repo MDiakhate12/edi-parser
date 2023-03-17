@@ -144,9 +144,6 @@ class DataLayer():
             response = s3.list_objects_v2(Bucket=self.__s3_bucket, Delimiter = '/', Prefix=self.__s3_prefix + path + "/")            
             
             folders_list = []
-            self.__logger.info(self.__s3_bucket)
-            self.__logger.info(self.__s3_prefix + path)
-            self.__logger.info(response)
             for prefix in response['CommonPrefixes']:
                 
                 full_path = prefix['Prefix'][:-1]
@@ -185,13 +182,6 @@ class DataLayer():
             file_content = self.__read_file_from_s3(file_path)
             
             return  json.loads(file_content)
-    def write_records_dynamoDB(self, SimulationId: str, table_dynamoDB: str) -> None:
-        dynamodb = boto3.client('dynamodb')
-        dataBucketPath = "s3://" + self.__s3_bucket + "/data/simulations/" + SimulationId + "/intermediate/"
-
-        dynamodb.put_item(TableName=table_dynamoDB, Item={'SimulationId':{'S':SimulationId},'Document':{'S':dataBucketPath},'status':{'S':'pending'} })
-        self.__logger.info("insert item on dynamoDB")
-
 
     def get_file_name_and_extension_from_path(self, file_path: str) -> 'tuple[str, str]':
         file_name_with_extension = file_path.split("/")[-1]

@@ -89,7 +89,6 @@ class PreProcessingLayer():
         else: df = pd.DataFrame(l_values, columns=l_headers)
 
         return df
-
     #endregion DATA TYPES PROCESSING
 
     #region ROTATION CSV
@@ -285,6 +284,7 @@ class PreProcessingLayer():
                 if val < min_val:
                     min_val = val
                     str_lowest_DG_class_col_suffix = DGS_col_id_suffix
+
         str_all_DG_classes_col_suffixes = str_all_DG_classes_col_suffixes[:-1] # to remove the last ;
 
         if not len(str_lowest_DG_class_col_suffix):
@@ -301,7 +301,6 @@ class PreProcessingLayer():
 ## LOWEST exists implied
     def __get_df_DG_classes_filtered(self, df_all_containers: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
         l_DG_classes = df_all_containers["DGS_HAZARD_ID"].tolist()
-        
         l_indices_to_drop = [ idx for idx in df_DG_classes_expanded.index if idx not in l_DG_classes ]
         df_DG_classes_filtered = df_DG_classes_expanded.drop(l_indices_to_drop, axis=1, inplace=False)
         df_DG_classes_filtered.drop(l_indices_to_drop, axis=0, inplace=True)
@@ -318,7 +317,7 @@ class PreProcessingLayer():
         l_rows_keys = []
         for k in d_rows_as_dicts.keys():
             d_row = d_rows_as_dicts[k]
-            
+ 
             if d_row not in l_d_rows:
                 l_d_rows.append(d_row)
                 l_rows_keys.append(k)

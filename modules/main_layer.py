@@ -14,7 +14,7 @@ from modules.enrichment_layer import EnrichmentLayer as EL
 from modules.pre_processing_layer import PreProcessingLayer as PL
 
 class MainLayer():
-    def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket: str="", table_dynamoDB: str="" ) -> None:
+    def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket: str="", ) -> None:
         self.logger = logger
         logger.info(event)
 
@@ -42,9 +42,6 @@ class MainLayer():
         # self.__DL.write_json(event, path_event)
         # directories
         self.__init_file_paths_from_event(path, simulation_id)
-
-        # Send items to dynamoDB :
-        #self.__DL.write_records_dynamoDB(simulation_id, table_dynamoDB)
 
         # intialize anomaly detection
         self.__AL = AL()
@@ -245,7 +242,7 @@ class MainLayer():
         
         d_stacks_rows_by_bay_row_deck = self.__ML.get_d_stacks_rows_by_bay_row_deck(df_stacks)
         
-        self.__AL.check_flying_containers(d_container_info_by_bay_row_tier, d_stacks_rows_by_bay_row_deck, d_type_to_size_map)
+        # self.__AL.check_flying_containers(d_container_info_by_bay_row_tier, d_stacks_rows_by_bay_row_deck, d_type_to_size_map)
         self.__AL.check_if_errors()
         
         onboard_csv_name = f"{self.__vessel_id} Containers OnBoard Loadlist 0.csv"
@@ -253,7 +250,7 @@ class MainLayer():
         self.__DL.write_csv(df_onboard_loadlist, onboard_csv_path)
 
         return df_onboard_loadlist
-
+    
     # To do later if needed: possibility of having all dg in one container listed seperatly not the lowest as agreed.
     # Extract more variable into df_all_containers, aka. (sublabel2 if exists, TLQ(limited quantity), etc. ) 
     def __output_DG_loadlist(self, df_onboard_loadlist: pd.DataFrame, df_all_containers: pd.DataFrame,d_DG_enrichment_map: dict, imdg_codes_df:pd.DataFrame) -> pd.DataFrame:
@@ -261,9 +258,10 @@ class MainLayer():
         
         d_DG_loadlist_cols_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_cols_map.json")
         df_copy = df_all_containers.copy()
+    
         if "DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE" not in df_copy.columns:
             df_copy["DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE"] = ""
-        
+
 
         df_DG_loadlist = self.__PL.get_df_DG_loadlist(df_onboard_loadlist, df_copy, d_DG_loadlist_cols_map)
         # fill for now as all "x"
@@ -475,7 +473,9 @@ class MainLayer():
         df_copy["new"] = df_copy.apply(lambda x: ','.join([str(x['Class']), str(x['Liquid']),str(x['Solid']), str(x['FlashPoint_Category'])]), axis=1)   
         df_copy["not permitted bay 74_dynamic"]= df_copy["new"].map(Dynamic_Not_Permitted_Bay_74_dict)  
         df_copy["not permitted bay 74"] = df_copy.apply(lambda x: "x" if ((x["not permitted bay 74_dynamic"] == "x" and x["not permitted bay 74"] != "x") or (x["not permitted bay 74"] == "x")) else "" , axis=1)
-
+        # Loading Remarks 
+        segregation_group_map = d_DG_enrichment_map["SEGREGATION_GROUP"]
+        df_copy["Loading remarks"] = df_copy["SegregationGroup"].apply(lambda row: "" if row == "" else ", ".join([segregation_group_map[value] for value in row.split(", ")]))
 
         df_DG_loadlist = df_copy.copy()        
 
@@ -510,7 +510,7 @@ class MainLayer():
         
         if (imdg_class == '2.2')\
         or (imdg_class == '2.3' and flammable == False and as_closed == True)\
-        or (imdg_class == '3' and flash_point >= 23 and flash_point <= 60)\
+        or (imdg_class == '3' and flash_point >= 23 )\
         or (imdg_class == '4.1' and as_closed == True)\
         or (imdg_class == '4.2' and as_closed == True)\
         or (imdg_class == '4.3' and liquid == True and as_closed == True and (flash_point >= 23 or flash_point is None))\
@@ -572,7 +572,7 @@ class MainLayer():
         
         if (imdg_class == '2.2'): return 6
         if (imdg_class == '2.3' and flammable == False and as_closed == True): return 7
-        if (imdg_class == '3' and flash_point >= 23 and flash_point <= 60): return 8
+        if (imdg_class == '3' and flash_point >= 23): return 8
         if (imdg_class == '4.1' and as_closed == True): return 9
         if (imdg_class == '4.2' and as_closed == True): return 10
         if (imdg_class == '4.3' and liquid == True and as_closed == True and (flash_point >= 23 or flash_point is None)): return 11
@@ -1006,12 +1006,14 @@ class MainLayer():
             
             category = self.__get_DG_category(un_no, imdg_class, sub_label,
                                     as_closed, liquid, solid, flammable, flash_point,l_explosion_protect_IIB_T4, l_IMDG_Class_1_S)
-            #print(container_id, pol, category)
-            #if category == '?':
+            # print(container_id, pol, category)
+            # if category == '?':h
+            #    print("un_no, imdg, sub_label, as_closed, liquid, solid, flammable, flash_point")
             #    print(un_no, imdg_class, sub_label,
-            #          as_closed, liquid, solid, flammable, flash_point)
+            #          as_closed, liquid, solid, flammable, flash_point,dg_remark,pgr,shipping_name, stowage_category, s_stowage_segregation)
             
             # and use the macro-category to expand the set of forbidden zones
+
             d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)], 
                                                                             dg_exclusions_by_category[category])
         
@@ -1042,7 +1044,7 @@ class MainLayer():
                 for (bay, l_rows, (macro_tier, l_tiers)) in s_exclusions:
                     row = []
                     row.extend([container_id, pol, bay[1:3], macro_tier])
-                f_loadlist_exclusions_list.append(row)
+                    f_loadlist_exclusions_list.append(row)
                 
         if self.__DG_Rules == "slot":
             # header
@@ -1266,7 +1268,9 @@ class MainLayer():
         l_DGS_cols = [
             col for col in d_csv_cols_to_segments_map["MAIN_HEADERS"]["DGS"].split(";")
         ]
-        l_static_DG_cols = ["ATT_PSN_DETAIL_DESCRIPTION_CODE", "ATT_PSN_DETAIL_DESCRIPTION","FTX_FREE_TEXT_DESCRIPTION_CODE","PACKAGING_DANGER_LEVEL_CODE","DGS_SUB_LABEL1"]
+        l_static_DG_cols = ["ATT_PSN_DETAIL_DESCRIPTION_CODE", "ATT_PSN_DETAIL_DESCRIPTION",
+                            "FTX_FREE_TEXT_DESCRIPTION_CODE","PACKAGING_DANGER_LEVEL_CODE",
+                            "DGS_SUB_LABEL1"]
 
         l_DGS_cols += l_static_DG_cols
         # prints occuppied DGS Hazards in Columns if not null 
@@ -1279,10 +1283,19 @@ class MainLayer():
         df_copy["DG_classes_suffixes"] = df_temp.apply(lambda row: self.__PL.get_DGS_suffixes(row.astype(str), l_DGS_HAZARD_ID_cols), axis=1)
         df_copy["lowest_DG_class_suffix"], df_copy["all_DG_class_suffixes"] = zip(*df_copy["DG_classes_suffixes"])
         df_copy.drop("DG_classes_suffixes", axis=1, inplace=True)
-        
+
         for col in l_DGS_cols:
             col_name = "DGS_" + col
-            df_copy[col_name] = df_copy.apply(lambda row: row[col_name+row["lowest_DG_class_suffix"]], axis=1)
+            df_copy[col_name] = df_copy.apply(lambda row: row.get(col_name + row["lowest_DG_class_suffix"], np.nan), axis=1)
+            # df_copy[col_name] = df_copy.apply(lambda row: row[col_name+row["lowest_DG_class_suffix"]], axis=1)
+      
+        # for col in l_DGS_cols:
+        #     col_name = "DGS_" + col
+        #     new_col_name = col_name + df_copy["lowest_DG_class_suffix"].iloc[0]
+        #     if new_col_name not in df_copy.columns:
+        #         df_copy[new_col_name] = pd.Series(np.nan, index=df_copy.index)
+        #     df_copy[col_name] = df_copy[new_col_name]
+            
         return df_copy
 
     def __get_df_DG_classes_expanded(self) -> pd.DataFrame:
@@ -1613,7 +1626,23 @@ class MainLayer():
                             l_cols.append(col)
 
                     df_attributes.columns = l_cols
-                   
+                    # path_name = "output_" + call_id +".csv"
+                    # df_attributes.to_csv(path_name)
+                    list_vals = ['DGS_REGULATIONS_CODE_1','DGS_HAZARD_ID_1','DGS_ADDITIONAL_HAZARD_CLASS_ID_1','DGS_HAZARD_CODE_VERSION_ID_1','DGS_UNDG_ID_1',
+                     'DGS_SHIPMENT_FLASHPOINT_DEGREE_1','DGS_MEASUREMENT_UNIT_CODE_1','DGS_PACKAGING_DANGER_LEVEL_CODE_1','DGS_EMS_CODE_1','DGS_HAZARD_MFAG_ID_1',
+                     'DGS_DGS_PRIM_LABEL1_1','DGS_DGS_SUB_LABEL1_1','DGS_DGS_SUB_LABEL2_1','DGS_DGS_SUB_LABEL3_1','DGS_ATT_PSN_FUNCTION_CODE_QUALIFIER_1',
+                     'DGS_ATT_PSN_TYPE_DESCRIPTION_CODE_1','DGS_ATT_PSN_TYPE_CODE_LIST_ID_CODE_1','DGS_ATT_PSN_TYPE_CODE_LIST_RESPONSIBLE_AGENCY_CODE_1',
+                     'DGS_ATT_PSN_DETAIL_DESCRIPTION_CODE_1','DGS_ATT_PSN_DETAIL_CODE_LIST_ID_CODE_1','DGS_ATT_PSN_DETAIL_CODE_LIST_RESPONSIBLE_AGENCY_CODE_1',
+                     'DGS_ATT_PSN_DETAIL_DESCRIPTION_1','DGS_ATT_TNM_FUNCTION_CODE_QUALIFIER_1','DGS_ATT_TNM_TYPE_DESCRIPTION_CODE_1',
+                     'DGS_ATT_TNM_TYPE_CODE_LIST_ID_CODE_1','DGS_ATT_TNM_TYPE_CODE_LIST_RESPONSIBLE_AGENCY_CODE_1','DGS_ATT_TNM_DETAIL_DESCRIPTION_CODE_1',
+                     'DGS_ATT_TNM_DETAIL_CODE_LIST_ID_CODE_1','DGS_ATT_TNM_DETAIL_CODE_LIST_RESPONSIBLE_AGENCY_CODE_1','DGS_ATT_TNM_DETAIL_DESCRIPTION_1',
+                     'DGS_MEA_AAA_MEASUREMENT_PURPOSE_CODE_QUALIFIER_1','DGS_MEA_AAA_MEASURED_ATTRIBUTE_CODE_1','DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_1',
+                     'DGS_MEA_AAA_MEASURE_1','DGS_FTX_TEXT_SUBJECT_CODE_QUALIFIER_1','DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_1','DGS_FTX_CODE_LIST_ID_CODE_1',
+                     'DGS_FTX_CODE_LIST_RESPONSIBLE_AGENCY_CODE_1','DGS_FTX_FREE_TEXT_1']
+                    for col in list_vals:
+                         if col not in df_attributes.columns:
+                               df_attributes[col] = ""
+
                     df_attributes = self.__add_lowest_DGS_cols_to_df(df_attributes, d_csv_cols_to_segments_map)
                     #NOTE consider these 2 lines
                     # l_non_empty_cols = [ col for col in df_all_containers.columns if sum(df_all_containers[col].astype(bool)) ]
@@ -1691,10 +1720,10 @@ class MainLayer():
                 l_cplex_slots.append("")
             else:
                 l_cplex_slots.append(pos)
-
         d_cplex_containers_slot_by_id = {
             container_id: slot_position for container_id, slot_position in list(zip(l_cplex_containers_ids, l_cplex_slots))
         }
+
         d_cplex_containers_slot_by_id_keys = list(d_cplex_containers_slot_by_id.keys())
 
         return df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys
@@ -1702,17 +1731,19 @@ class MainLayer():
     def __update_csvs_with_CPLEX_output(self, d_cplex_containers_slot_by_id: dict, d_cplex_containers_slot_by_id_keys: dict) -> 'tuple[pd.DataFrame, pd.DataFrame]':
         for i, csv_path in enumerate(self.__l_POL_POD_csvs_paths):
             df = self.__DL.read_csv(csv_path, DEFAULT_MISSING)
+
             df.fillna("", inplace=True)
             df = self.__PL.process_slots(df, 1, True)
+
             l_containers_ids = df["EQD_ID"].tolist()
             l_slot_positions = df.iloc[:, 1].tolist()
 
-            # l_slot_positions = []
-            # for pos in df.iloc[:, 1].tolist():
-            #     if pos != pos:
-            #         l_slot_positions.append("")
-            #     else:
-            #         l_slot_positions.append(pos)
+            l_slot_positions = []
+            for pos in df.iloc[:, 1].tolist():
+                if pos != pos:
+                    l_slot_positions.append("")
+                else:
+                    l_slot_positions.append(pos)
             
             l_containers_to_drop_indices = []
             for j, container_id in enumerate(l_containers_ids):
@@ -1905,8 +1936,10 @@ class MainLayer():
 
     def __run_reexecution(self) -> None:
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json")
-
+     
         df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output()
+        
+        
         df_all_containers, df_filled_slots = self.__update_csvs_with_CPLEX_output(d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys)
 
         #TODO fix repetition of grouping with DG classes: decouple repetition of steps between pre- and post-processing

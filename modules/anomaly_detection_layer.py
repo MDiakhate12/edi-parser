@@ -130,7 +130,8 @@ class AnomalyDetectionLayer():
         s_container_ids_dups = df["EQD_ID"].duplicated()
         l_container_id_dups = df[s_container_ids_dups]["EQD_ID"].tolist()
         if s_container_ids_dups.sum():
-            criticity = "Error"
+            # criticity = "Error"
+            criticity = "Warning"
             message = self.__get_full_msg("with a duplicated serial number")
             error_value = "TBD"
             self.__add_anmoalies_from_list(l_container_id_dups, criticity, message, error_value, call_id, file_type)
@@ -294,7 +295,7 @@ class AnomalyDetectionLayer():
                 l_mapped_PODs_names.append(mapped_POD_name)
                 continue
 
-            if not is_last_char_alpha: # add warning whether it is an onboard or a loadlist
+            if not is_last_char_alpha and POD_name[:4] != "USLA": # add warning whether it is an onboard or a loadlist
                 self.__add_single_anomaly("Warning", fictive_port_name_war_msg, fictive_port_name_war_val, call_id, file_type, container_id)
             
             POD_name_1st_4_chars = POD_name[:4] 
@@ -304,7 +305,8 @@ class AnomalyDetectionLayer():
                     mapped_POD_name = d_rot_1st_4_chars_to_port_name_base[POD_name_1st_4_chars]
 
                 else:
-                    self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
+                    # self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
+                    self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
 
             else: # LL other than 1st LL
                 if not is_last_char_alpha:
@@ -527,7 +529,8 @@ class AnomalyDetectionLayer():
         dups_count = pds_dups_bool_mask.sum()
         
         if dups_count:
-            criticity = "Error"
+            # criticity = "Error"
+            criticity = "Warning"
             message = self.__get_full_msg("with the same slot positions")
             error_value = "TBD"
 
@@ -561,6 +564,7 @@ class AnomalyDetectionLayer():
             d_stacks_rows_by_bay_row_deck: dict,
             d_type_to_size_map: dict
         ) -> None:
+
         criticity = "Error"
         l_container_bay_row_tier_keys = list(d_container_info_by_bay_row_tier.keys())
         for i, container_tup in enumerate(l_container_bay_row_tier_keys):
