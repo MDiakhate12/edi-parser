@@ -17,6 +17,21 @@
       <outputMap />
       <projectId>10319</projectId>
     </aws.AwsLambdaPackageFile>
+    <aws.s3.File name="post-processing-Optistow" file="deployment_package_file">
+      <tags>
+        <value>hermes-front</value>
+      </tags>
+      <scanPlaceholders>true</scanPlaceholders>
+      <preScannedPlaceholders>false</preScannedPlaceholders>
+      <placeholders />
+      <checksum>0a82395032c8a5f0b6ab6e18a0f917aade040263f21252a16d3fedf4440f9fd9</checksum>
+      <fileEncodings>
+      <entry key=".+\.properties">ISO-8859-1</entry>
+      </fileEncodings>
+      <isRescanned>false</isRescanned>
+      <targetPathInBucket>code/post-processing</targetPathInBucket>
+      <acl>private</acl>
+    </aws.s3.File> 
   </deployables>
   <applicationDependencies />
 </udm.DeploymentPackage>
