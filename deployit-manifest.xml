@@ -19,7 +19,7 @@
     </aws.AwsLambdaPackageFile>
     <aws.s3.File name="post-processing-Optistow" file="deployment_package_file">
       <tags>
-        <value>hermes-front</value>
+        <value>post-processing-Optistow</value>
       </tags>
       <scanPlaceholders>true</scanPlaceholders>
       <preScannedPlaceholders>false</preScannedPlaceholders>
