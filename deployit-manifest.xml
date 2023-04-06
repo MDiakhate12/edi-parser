@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<udm.DeploymentPackage version="deployment_version-version_suffix" application="Digital_Lab/Optistow/Pre-processing-CICD">
+<udm.DeploymentPackage version="deployment_version-version_suffix" application="Shipping/Optistow/Pre-processing-CICD">
   <orchestrator />
   <enableAutomaticOrchestrators>false</enableAutomaticOrchestrators>
   <application />
