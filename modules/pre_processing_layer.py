@@ -176,6 +176,7 @@ class PreProcessingLayer():
         d_new_iso_codes_height = d_iso_codes_map["new"]["height"]
 
         l_iso_codes = df["Type"].tolist()
+        
         l_sizes = []
         l_heights = []
         for iso_code in l_iso_codes:
@@ -297,31 +298,21 @@ class PreProcessingLayer():
         # DGS_id_num_prefix = "_".join([DGS_col_split_with_row_min_idx[0], DGS_id_num, ""])
 
         return str_lowest_DG_class_col_suffix, str_all_DG_classes_col_suffixes
-## LOWEST exists implied _ OLD 
-    def __get_df_DG_classes_filtered(self, df_DG_LoadList: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
-        l_DG_classes = df_DG_LoadList[['Class', 'SubLabel1']].values.ravel()
-        l_DG_classes = list(pd.Series(l_DG_classes).dropna().unique())
-        l_DG_classes = [x for x in l_DG_classes if x!='']
-        l_DG_classes = [float(x) for x in l_DG_classes]
+## LOWEST exists implied
+    def __get_df_DG_classes_filtered(self, df_all_containers: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
+        l_DG_classes = df_all_containers["DGS_HAZARD_ID"].tolist()
         l_indices_to_drop = [ idx for idx in df_DG_classes_expanded.index if idx not in l_DG_classes ]
-    
         df_DG_classes_filtered = df_DG_classes_expanded.drop(l_indices_to_drop, axis=1, inplace=False)
         df_DG_classes_filtered.drop(l_indices_to_drop, axis=0, inplace=True)
-    
-        DG_columns = [str(int(x)) if x.is_integer() else str(x) for x in df_DG_classes_filtered.columns]
-
-        df_DG_classes_filtered.index = DG_columns
-        df_DG_classes_filtered.columns = DG_columns
-
         df_DG_classes_filtered.replace(["*", "X"], "", inplace=True)
 
         return df_DG_classes_filtered
 
-
     #NOTE ask about filtering the DG classes from table
-    def get_df_DG_classes_grouped(self, df_DG_LoadList: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
-        df_DG_classes_filtered = self.__get_df_DG_classes_filtered(df_DG_LoadList, df_DG_classes_expanded)
+    def get_df_DG_classes_grouped(self, df_all_containers: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
+        df_DG_classes_filtered = self.__get_df_DG_classes_filtered(df_all_containers, df_DG_classes_expanded)
         d_rows_as_dicts = df_DG_classes_filtered.to_dict(orient="dict")
+
         l_d_rows = []
         l_rows_keys = []
         for k in d_rows_as_dicts.keys():
@@ -411,7 +402,7 @@ class PreProcessingLayer():
         ATT_HAZ_cols = []
         ATT_AGR_col = ""
         for col in attributes_df.columns:
-            if "DETAIL_DESCRIPTION_CODE_" in col:
+            if "DETAIL_DESCRIPTION_CODE" in col:
                 if "DGS_ATT_HAZ" in col:
                     ATT_HAZ_cols.append(col)
             
@@ -465,7 +456,7 @@ class PreProcessingLayer():
         return df
 
     def __reorder_df_DG_loadlist_cols(self, df_DG_loadlist: pd.DataFrame) -> pd.DataFrame:
-        DG_cols_ordered_list = ("Serial Number;Operator;POL;POD;Type;Closed Freight Container;Weight;Regulation Body;Ammendmant Version;UN;Class;SubLabel1;SubLabel2;" +\
+        DG_cols_ordered_list = ("Serial Number;Operator;POL;POD;Type;Closed Freight Container;Weight;Ammendmant Version;UN;Class;SubLabel1;SubLabel2;" +\
                                 "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC);FlashPoints;Loading remarks;" +\
                                 "Limited Quantity;Marine Pollutant;PGr;Liquid;Solid;Flammable;Non-Flammable;Proper Shipping Name (Paragraph B of DOC);" +\
                                 "SegregationGroup;SetPoint;Stowage and segregation;Package Goods;Stowage Category;not permitted bay 74;Zone").split(";")
@@ -473,7 +464,7 @@ class PreProcessingLayer():
         df_DG_loadlist = df_DG_loadlist[DG_cols_ordered_list]
 
         return df_DG_loadlist
-    #old code
+
     def get_df_DG_loadlist(self, df_onboard_loadlist: pd.DataFrame, df_all_containers: pd.DataFrame, d_cols_map: dict) -> pd.DataFrame:
         df_DG_containers = df_all_containers[df_onboard_loadlist["DG_Class"]!=""]
         df_DG_loadlist_cols = [k for k in d_cols_map.keys() if k in df_DG_containers.columns]
@@ -488,58 +479,6 @@ class PreProcessingLayer():
                
         return df_DG_loadlist
 
-    def get_df_DG_loadlist_exhaustive(self, df_all_containers: pd.DataFrame, d_cols_names: dict) -> pd.DataFrame:
-        
-        df_DG_containers = df_all_containers[df_all_containers['DGS_HAZARD_ID_1']!=""]
-        df_DG_containers = pd.wide_to_long(df_DG_containers,
-                        stubnames=[
-                                    'DGS_REGULATIONS_CODE_',
-                                    'DGS_HAZARD_CODE_VERSION_ID_',
-                                    'DGS_HAZARD_ID_',
-                                    'DGS_DGS_SUB_LABEL1_',
-                                    'DGS_DGS_SUB_LABEL2_',
-                                    'DGS_UNDG_ID_',
-                                    'DGS_SHIPMENT_FLASHPOINT_DEGREE_',
-                                    'DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_',
-                                    'DGS_MEASUREMENT_UNIT_CODE_',
-                                    'DGS_PACKAGING_DANGER_LEVEL_CODE_',
-                                    'DGS_ATT_PSN_DETAIL_DESCRIPTION_',
-                                    'DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE_',
-                                    'DGS_MEA_AAA_MEASURE_',
-                                    'DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_',
-                                    'DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_',
-                                    'DGS_ATT_HAZ_DETAIL_DESCRIPTION_CODE_'
-                                ], 
-                        i=['EQD_ID','LOC_9_LOCATION_ID','LOC_11_LOCATION_ID'],
-                        j='variable'
-                        )
-        
-        df_DG_containers = df_DG_containers[df_DG_containers['DGS_HAZARD_ID_']!=""]
-        df_DG_containers = df_DG_containers.reset_index()
-
-    
-        df_DG_loadlist = df_DG_containers[['EQD_ID','EQD_NAD_CF_PARTY_ID','LOC_9_LOCATION_ID',
-              'LOC_11_LOCATION_ID','EQD_SIZE_AND_TYPE_DESCRIPTION_CODE',
-              'DGS_REGULATIONS_CODE_','DGS_HAZARD_CODE_VERSION_ID_',
-              'DGS_HAZARD_ID_','DGS_DGS_SUB_LABEL1_','DGS_DGS_SUB_LABEL2_',
-              'DGS_UNDG_ID_','DGS_SHIPMENT_FLASHPOINT_DEGREE_','DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_',
-              'DGS_MEASUREMENT_UNIT_CODE_', 'DGS_PACKAGING_DANGER_LEVEL_CODE_',
-              'DGS_ATT_PSN_DETAIL_DESCRIPTION_','DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE_',
-              'DGS_MEA_AAA_MEASURE_','DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_',
-              'DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_','DGS_ATT_HAZ_DETAIL_DESCRIPTION_CODE_',
-              'TMP_TEMPERATURE_DEGREE','TMP_TEMPERATURE_MEASUREMENT_UNIT_CODE'
-              ]].copy()
-        
-
-        df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist, df_DG_containers)
-        df_DG_loadlist = self._add_DG_missing_cols_to_df(df_DG_loadlist)
-        df_DG_loadlist.rename(columns = d_cols_names, inplace=True)  
-        df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
-        
-        df_DG_loadlist.fillna("", inplace=True) # just in case
-    
-
-        return df_DG_loadlist
     #endregion DG LOADLIST
 
     #region FILLED TANKS
