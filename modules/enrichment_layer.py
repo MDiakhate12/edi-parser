@@ -112,6 +112,11 @@ class EnrichmentLayer():
             the dictionary where a key is a csv header and the value of that key is a list of values for that csv header
         """
         
+        # for key in list(csv_cols_dict.keys()):
+        #     if 'EQA_NAD' in key:
+        #         new_key = key.replace('EQA_NAD', 'EQA_NAD_CF')
+        #         csv_cols_dict[new_key] = csv_cols_dict.pop(key)
+
         EQD_private_sub_headers = [ sub_header for sub_header in d_segments_map["EQD"] if sub_header not in ["FTX", "RFF"] ]
         EQD_private_sub_headers.append("EQD")
 
@@ -280,15 +285,20 @@ class EnrichmentLayer():
 
                 ## EQA HEADERS ##
                 if "EQA" == csv_main_segment_header_prefix:
+            
                     if not any(csv_main_segment_header_prefix in present_csv_segment_header for present_csv_segment_header in present_csv_cols_list) and csv_main_segment_header_prefix in csv_cols_dict.keys():
                         present_csv_cols_list += csv_cols_dict[csv_main_segment_header_prefix]
                         self.__fill_attributes_dict_EQA(segment_split, csv_cols_dict[csv_main_segment_header_prefix])
 
                     elif segment_header_name == "NAD":
                         csv_sub_segment_header_suffix = common_helpers.get_compound_segment_header(segment_split, segment_header_name, 0)
-                        csv_sub_segment_header = f"{csv_main_segment_header_prefix}_{csv_sub_segment_header_suffix}"
+                        # csv_sub_segment_header = f"{csv_main_segment_header_prefix}_{csv_sub_segment_header_suffix}"
+                        csv_sub_segment_header = f"{csv_main_segment_header_prefix}_NAD"
+                        
                         if not any(csv_sub_segment_header in present_csv_segment_header for present_csv_segment_header in present_csv_cols_list):
+
                             present_csv_cols_list += csv_cols_dict[csv_sub_segment_header]
+                            
                             self.__fill_attributes_dict_NAD(segment_split, csv_cols_dict[csv_sub_segment_header])
                 
                 ## DGS HEADERS ##
