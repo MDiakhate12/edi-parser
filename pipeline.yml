@@ -9,7 +9,7 @@ provisionFor:
  - master
  - deploy
  - release
-
+ 
 ### Additional configuration is possible depending on the project requirements
 
 ## General information regarding [Continuous Integration & Continuous Deployment]

@@ -1,4 +1,4 @@
-#!/Library/Developer/CommandLineTools/usr/bin/python3
+#!/home/ec2-user/environment/vpy38/bin/python3.8
 # -*- coding: utf-8 -*-
 import re
 import sys

@@ -6,9 +6,9 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-    <aws.AwsLambdaPackageFile name="pre-processing-Optistow" file="deployment_package_file">
+    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="deployment_package_file">
       <tags>
-        <value>pre-processing-Optistow</value>
+        <value>lambda-preprocessing-dev</value>
       </tags>
       <scanPlaceholders>true</scanPlaceholders>
       <preScannedPlaceholders>false</preScannedPlaceholders>
@@ -17,9 +17,9 @@
       <outputMap />
       <projectId>10319</projectId>
     </aws.AwsLambdaPackageFile>
-    <aws.s3.File name="post-processing-Optistow" file="deployment_package_file">
+    <aws.s3.File name="optistow-code-bucket-dev" file="deployment_package_file">
       <tags>
-        <value>post-processing-Optistow</value>
+        <value>optistow-code-bucket-dev</value>
       </tags>
       <scanPlaceholders>true</scanPlaceholders>
       <preScannedPlaceholders>false</preScannedPlaceholders>
@@ -29,7 +29,7 @@
       <entry key=".+\.properties">ISO-8859-1</entry>
       </fileEncodings>
       <isRescanned>false</isRescanned>
-      <targetPathInBucket>code/post-processing</targetPathInBucket>
+      <targetPathInBucket>post-processing</targetPathInBucket>
       <acl>private</acl>
     </aws.s3.File> 
   </deployables>
