@@ -132,7 +132,6 @@ class MappingLayer():
         """
         if len(segment_header_name):
             csv_col_prefix = f"{csv_main_segment_header_prefix}_{segment_header_name}"
-    
         else:
             csv_col_prefix = csv_main_segment_header_prefix
 
@@ -492,7 +491,7 @@ class MappingLayer():
                     if segment_header_name == "EQD":
                         # print(EQD_csv_cols_list)
                         self.__check_and_fill_csv_cols_dict(csv_main_segment_header_prefix, EQD_csv_cols_list)
-                    
+
                     else:
                         EQD_RFF_count, EQD_FTX_count = self.__fill_csv_cols_dict_EQD_and_return_counts(
                             csv_main_segment_header_prefix, segment_header_name, segment_split, FTX_csv_cols_list, RFF_csv_cols_list, NAD_csv_cols_list,
@@ -511,6 +510,7 @@ class MappingLayer():
                 if "EQA" == csv_main_segment_header_prefix:
                     if segment_header_name == "EQA":
                         self.__check_and_fill_csv_cols_dict(csv_main_segment_header_prefix, EQA_csv_cols_list)
+
                     else:
                         self.__check_and_fill_csv_cols_dict(csv_main_segment_header_prefix, NAD_csv_cols_list, segment_header_name)
 
@@ -683,6 +683,7 @@ class MappingLayer():
             self.__get_d_csv_cols_containers(containers_data_list, new_container_data_flag, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, baplie_type_from_content)
 
         csv_cols_list = self.__get_all_csv_cols_list()
+        
         return self.csv_cols_dict, csv_cols_list
     
     # def map_POLs_in_df(self, df: pd.DataFrame, call_port_name: str, call_port_name_base: str) -> tuple[pd.DataFrame, list]:
