@@ -25,12 +25,12 @@ import logging
 # # # Add the file handler to the root logger
 # root_logger.addHandler(file_handler)
 
-# # # Create a console handler
+# # Create a console handler
 # console_handler = logging.StreamHandler()
 # console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # # # Set the formatter for the console handler
+# # # Set the formatter for the console handler
 # console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 # console_handler.setFormatter(console_formatter)
 
@@ -64,34 +64,20 @@ class MainLayer():
         self.__simulation_id = d_event_json["simulation_id"]
         self.__vessel_id = d_event_json["vesselImo"]
         self.__target_port = d_event_json["port"]
-        # self.__service_line = d_event_json["service_line"]
-        #self.__reuse_previous_results = d_event_json["reusePreviousResults"]
         self.__reuse_previous_results = reusePreviousResults
         self.__s3_bucket_out = s3_bucket_out
         self.__s3_bucket_in = s3_bucket_in
-        # self.__s3_bucket_out = d_event_json["s3_path_out"]
-        # self.__s3_bucket_in = d_event_json["s3_path_ref"]
         logger.info(f"self.__reuse_previous_results : {self.__reuse_previous_results}")
+        
         ## DG RULES if Master or Slot
         self.__DG_Rules = d_event_json["dg_exception_rules"]
-        # self.__speed = d_event_json["speed"]
-        # self.__gm = d_event_json["gm"]
-        # self.__draft = d_event_json["draft"]
-        # self.__lashing_conditions = d_event_json["lashing_conditions"]
-        # #save event as .json in a folder on s3:
-        # file_event = "event" + "_" + simulation_id + ".json"
-        # logger.info(f" file_event : { file_event}")
-        # path_event = f"event/{file_event}"
-        # logger.info(f" path_event : { path_event}")
-        # self.__DL.write_json(event, path_event)
-        # directories
+        
+        ## directories
         self.__init_file_paths_from_event(path, self.__simulation_id, self.__s3_bucket_out)
-        # initialize anomaly detection
+        
+        ## initialize anomaly detection
         self.__AL = AL()
-        
-        # initialize Lashing Layer"
-        # self.__Lashing = Lashing(self.logger, self.__vessel_id, self.__speed, self.__gm, self.__draft, self.__lashing_conditions)
-        
+
         # for reading, writing, and mapping functionalities
         self.__l_baplies_filepaths = []
         self.__d_seq_num_to_port_name = {}
@@ -102,10 +88,9 @@ class MainLayer():
         # folder name params
         #check for correctness of files 
         logger.info("before __init_params_from_folders_names")
-        self.__init_params_from_folders_names()
-        # # Intialize worst cast files generation 
-        # self.__worst_case_baplies = worst_case_baplies(self.logger, self.__vessel_id, simulation_id, self.__Edi_static_in_dir, self.__dynamic_in_dir, self.__s3_bucket_in, self.__s3_bucket_out)
-        # self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
+        
+        self.__after_first_call_loadlist = self.__init_params_from_folders_names()
+    
         # intialize mapping layer
         self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
         
@@ -203,8 +188,8 @@ class MainLayer():
             self.__d_port_name_to_seq_num[port_name] = seq_num # port_name as is for 1st time, and will be with the number extension if repeated
 
         self.__d_seq_num_to_port_name = { val: k for k, val in self.__d_port_name_to_seq_num.items() } # substitue values in map as ports names might change
-        
-    def __init_params_from_folders_names(self) -> None:
+
+    def __init_params_from_folders_names(self) -> int:
         """
         Enriches class attributes from the folder names available in the simulation folder. These attibutes and their content are:
         - l_baplies_filepaths: contains the paths to all the baplies
@@ -229,13 +214,14 @@ class MainLayer():
         """
         onboard_call = ""
         self.logger.info(self.__dynamic_in_dir)
+        after_first_call_loadlist = 0
         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
             folder_name_split = folder_name.split("_")
             call_id = "_".join(folder_name_split[-2:])
             
             seq_num = int(folder_name_split[-2])
-            loadlist_flag, tank_flag = 0, 0
+            loadlist_flag, tank_flag  = 0, 0
             
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                 if file_name.split(".")[-1] == "edi":
@@ -250,14 +236,16 @@ class MainLayer():
                         if file_name == "Tank.edi" :
                             tank_flag = 1
                             loadlist_flag = 1
-                        else: 
+                        elif file_name == "LoadList.edi": 
                             loadlist_flag = 1
+                            after_first_call_loadlist += 1
                             
                     elif file_name == "Tank.edi" :
                         tank_flag = 1
                         
                     elif file_name == "LoadList.edi":
                         loadlist_flag = 1
+                        
                         
                         if seq_num == 1:
                             self.__get_first_two_ports_baplie_and_csv_paths(baplies_dir, file_name, folder_name)   
@@ -276,9 +264,11 @@ class MainLayer():
             port_name = folder_name_split[-1]
             self.__d_seq_num_to_port_name[seq_num] = port_name
         
+        
         # self.__AL.check_if_errors()
-
+        
         self.__get_port_name_and_seq_num_maps()
+        return after_first_call_loadlist
 
     def __output_onboard_loadlist(
             self,
@@ -1909,45 +1899,68 @@ class MainLayer():
     def __run_first_execution(self) -> None:
         
         # iso codes sizes and heights map (to check iso codes)
+        self.logger.info("Reading iso_code_map from referential configuration folder...")
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
         
         # Add Rotations before (identify (gm, std speed , draft and service line from rotation intermediate ))
-        self.logger.info("Reading Rotations intermediate csv file from simulation folder...")
-        rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
-        RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
-        # RW_costs = self.__DL.read_xlsx(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket= self.__s3_bucket_in, sheet= "SHIFTING RATES")
-        rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
-        consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
-        lashing_parameters_dict = extract_as_dict(rotation_intermediate, indexes=None, columns=['CallFolderName', 'StdSpeed', 'Gmdeck', 'MaxDraft', 'worldwide', 'service', 'WindowStartTime', 'WindowEndTime'])
         
+        self.logger.info("*" * 80)
+        self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
+        rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
+        self.logger.info("Reading stevedoring cost from referential costs folder...")
+        RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
+        self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
+        rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+        self.logger.info("Reading consumption csv file from referential vessels folder...")
+        consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
+        self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")
+        lashing_parameters_dict = extract_as_dict(rotation_intermediate, indexes=None, columns=['CallFolderName', 'StdSpeed', 'Gmdeck', 'MaxDraft', 'worldwide', 'service', 'WindowStartTime', 'WindowEndTime'])
         self.__AL.validate_data(lashing_parameters_dict)
         self.__AL.check_if_errors()
-
+        self.logger.info("*"*80)
         
         # # Intialize worst cast files generation 
         self.__service_code = lashing_parameters_dict[1]['service']
-        self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
-        EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
-        self.__worst_case_baplies = worst_case_baplies(self.logger, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__s3_bucket_in, self.__s3_bucket_out)
-        self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
+        self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
+        if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
+            self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
+            EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
+            self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__s3_bucket_in, self.__s3_bucket_out)
+            self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
 
+            # Check if all LoadLists exist after generation
+            for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+                baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+                folder_name_split = folder_name.split("_")
+                call_id = "_".join(folder_name_split[-2:])
+                loadlist_flag = 0 
+                for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                    if i >= 2:
+                            if file_name == "LoadList.edi": 
+                                loadlist_flag = 1
+                self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
+            self.__AL.check_if_errors()
+        else: 
+            self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
+        self.logger.info("*" * 80)    
         # Intialize Vessel
         self.logger.info(f"Creating Vessel instance for vessel: {self.__vessel_id}")
         # vessel profile file in referentials
+        self.logger.info(f"Reading vessel_profile.json & DG_rules.json configuration file from referential vessel folder for vessel: {self.__vessel_id}...")
         vessel_profile = self.__DL.read_json(f"{self.__vessels_static_in_dir}/vessel_profile.json", s3_bucket=self.__s3_bucket_in)
         
         # DG_rules config JSON for Vessel
         DG_rules = self.__DL.read_json(f"{self.__vessels_static_in_dir}/DG_rules.json", s3_bucket=self.__s3_bucket_in)
         
-        std_speed = float(lashing_parameters_dict[1]['StdSpeed'])
-        draft = float(lashing_parameters_dict[1]['MaxDraft'])
-        gm_deck = float(lashing_parameters_dict[1]['Gmdeck'])
+        std_speed = float(lashing_parameters_dict[0]['StdSpeed'])
+        draft = float(lashing_parameters_dict[0]['MaxDraft'])
+        gm_deck = float(lashing_parameters_dict[0]['Gmdeck'])
         vessel = Vessel(self.logger, std_speed, gm_deck, draft, vessel_profile, DG_rules)
         
         #Iniatlize Lashing 
-        lashing_conditions = lashing_parameters_dict[1]['worldwide']
+        lashing_conditions = lashing_parameters_dict[0]['worldwide']
         lashing = Lashing(self.logger, vessel, lashing_conditions)
-        
+        self.logger.info("*"*80)
         
         # empty lists for dataframes that are going to be saved as csvs and their folder names (used in the names of the csvs)
         l_dfs_containers, l_containers_folder_names, l_dfs_rotation_containers = [], [], []
@@ -2084,15 +2097,17 @@ class MainLayer():
             
         self.__AL.check_if_errors() 
         
+        self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         fuel_data_dict = fuel_costs_df.set_index('FUEL_TYPE')['COST_USD'].to_dict()
-        
+        self.logger.info("Generating final rotation.csv...")
         rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict)
+        #reactivate
         df_rotation_final = rotations.get_rotations_final()
         rotation_csv_name = "rotation.csv"
         rotation_csv_path = f"{self.__py_scripts_out_dir}/{rotation_csv_name}"
         self.__DL.write_csv(df_rotation_final, rotation_csv_path, s3_bucket=self.__s3_bucket_out)
-        
+        # 
         # saving after to save time as an error might be thrown before
         for i, df in enumerate(l_dfs_containers):
             folder_name = l_containers_folder_names[i]

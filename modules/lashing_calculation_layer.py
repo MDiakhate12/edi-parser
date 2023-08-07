@@ -432,7 +432,14 @@ class Lashing():
         
         containers = call_0_dataframe
         
-        containers = containers[['LOC_147_ID','EQD_ID', 'EQD_SIZE_AND_TYPE_DESCRIPTION_CODE', 'EQD_FULL_OR_EMPTY_INDICATOR_CODE','EQD_MEA_AET_MEASURE', 'EQD_MEA_AET_MEASUREMENT_UNIT_CODE', 'EQD_MEA_VGM_MEASURED_ATTRIBUTE_CODE', 'EQD_MEA_VGM_MEASURE', 'EQD_MEA_VGM_MEASUREMENT_UNIT_CODE','LOC_9_LOCATION_ID', 'LOC_11_LOCATION_ID']]
+        columns_to_add = ['LOC_147_ID','EQD_ID', 'EQD_SIZE_AND_TYPE_DESCRIPTION_CODE', 'EQD_FULL_OR_EMPTY_INDICATOR_CODE','EQD_MEA_AET_MEASURE', 'EQD_MEA_AET_MEASUREMENT_UNIT_CODE', 'EQD_MEA_VGM_MEASURED_ATTRIBUTE_CODE', 'EQD_MEA_VGM_MEASURE', 'EQD_MEA_VGM_MEASUREMENT_UNIT_CODE','LOC_9_LOCATION_ID', 'LOC_11_LOCATION_ID']
+        for column in columns_to_add:
+            try:
+                containers[column]
+            except KeyError:
+                containers[column] = ''
+
+        containers = containers[columns_to_add]
         
         containers = containers.iloc[containers['LOC_147_ID'].notnull().values ,:]
         self._logger.info(f"There is {containers.shape[0]} containers are Onboard with a slot position...")

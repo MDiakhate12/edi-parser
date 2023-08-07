@@ -32,47 +32,64 @@ class rotation():
         self.rotations_intermediate["nb_moves_calc"] = 0 # this is for calculating the number of moves required for each port
         l_records = self.rotations_intermediate.to_dict(orient="records")
         d_rotation = { record["ShortName"]: record for record in l_records }
-        
+
         return d_rotation
     
+    
+    def __map_d_rotation_to_seq_num_port_name(self, d_rotation:dict) -> dict: 
+            updated_dict2 = {}
+
+            # Iterate through the keys of the first dictionary
+            for key in self.d_seq_num_to_port_name:
+                sequence_number = key
+                port_name = self.d_seq_num_to_port_name[key]
+                
+                # Check if the sequence_number exists in dict2
+                for port_key in d_rotation:
+                    if d_rotation[port_key]['Sequence'] == sequence_number:
+                        # Update the 'ShortName' field in the second dictionary with the port_name
+                        d_rotation[port_key]['ShortName'] = port_name
+                        
+                        # Add the updated entry to the new dictionary
+                        updated_dict2[port_name] = d_rotation[port_key]
+                        break
+            return updated_dict2
+        
     def __add_num_moves_to_d_rotation_pol(self, df_port_containers: pd.DataFrame, d_rotation: dict, port_name: str, port_num: int) -> dict:
         if port_num != 0:
             try:
                 d_rotation[port_name]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_9_LOCATION_ID"].str.contains(port_name)]) # add number of containers in loadlist edi of port_name
             except: 
                 d_rotation[port_name]["nb_moves_calc"] += 0
-                
+
             return d_rotation
         
         else : 
             return d_rotation
 
     def __add_num_moves_to_d_rotation_pod(self, df_port_containers: pd.DataFrame, d_rotation: dict, port_name: str, port_num: int) -> dict:
+
         if port_num == 0: # if loadlist
             try: 
-                d_rotation[port_name[:5]]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_11_LOCATION_ID"].str.contains(port_name)]) # add number of containers in loadlist edi of port_name
+                d_rotation[port_name]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_11_LOCATION_ID"].str.contains(port_name)]) # add number of containers in loadlist edi of port_name
             except: 
                 None
         # for next ports
         for next_seq_num in range(port_num+1, self.ports_count):
             
             next_port_name = self.d_seq_num_to_port_name[next_seq_num]
+
             try:
-                d_rotation[next_port_name[:5]]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_11_LOCATION_ID"].str.contains(next_port_name)])
+                d_rotation[next_port_name]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_11_LOCATION_ID"].str.contains(next_port_name)])
             except: 
-                d_rotation[next_port_name[:5]]["nb_moves_calc"] += 0
+                d_rotation[next_port_name]["nb_moves_calc"] += 0
         return d_rotation
     
     
     def __add_RW_costs_to_d_rotation(self, d_rotation: dict, port_name: str) -> None:
-        # l_cols = self.df_shifting_rates.iloc[1, :].tolist()
 
-        # df_shifting_rates_clean = self.df_shifting_rates.iloc[2:, :]
-        # df_shifting_rates_clean.reset_index(inplace=True, drop=True)
-        # df_shifting_rates_clean.columns = l_cols
-        # print(df_shifting_rates_clean)
         terminal_code = d_rotation[port_name]["Terminal"]
-
+        
         port_name_base = port_name[:5] # cz the ports names in the booklet are without number extensions
         df_temp = self.df_shifting_rates[
                     ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) &
@@ -256,15 +273,13 @@ class rotation():
                     subdict['speed_max'] = 0
                     subdict['speed_min'] = 0 
                     subdict["cons_per_hour_at_v_min"] = 0
-                    subdict["cons_per_hour_at_v_max"] = 0
-       
-            
+                    subdict["cons_per_hour_at_v_max"] = 0 
         
-                    
+        d_rotation = self.__map_d_rotation_to_seq_num_port_name(d_rotation)
+        
         for df, port_name in list(zip(self.l_dfs_containers_POL_POD, self.l_ports_names)):
             
             port_num = self.d_port_name_to_seq_num[port_name]
-
 
             self.__add_num_moves_to_d_rotation_pol(df, d_rotation, port_name, port_num)
             self.__add_num_moves_to_d_rotation_pod(df, d_rotation, port_name, port_num)

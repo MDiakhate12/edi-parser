@@ -6,7 +6,7 @@ import os
 import sys
 import datetime 
 
-# sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
+sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.main_layer import MainLayer
 from modules.data_layer import DataLayer as DL
 
@@ -28,10 +28,10 @@ def log_error(e: Exception, err_msg: str) -> None:
 def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynamoDB: str, target_key : str="", status : str="PENDING") -> None:
         dynamodb = client('dynamodb')
         dataBucketPath = "s3://" + bucket_data_name + "/" + SimulationId + "/out/" + target_key if status != "PENDING" else "s3://" + bucket_data_name + "/" + SimulationId + "/intermediate/" 
-        current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         dynamodb.put_item(TableName=table_dynamoDB, Item={
         'SimulationId': {'S': SimulationId},
-        'Update_Time': {'S': current_time},  # Corrected syntax for datetime
+        # 'Update_Time': {'S': current_time},  # Corrected syntax for datetime
         'Document': {'S': dataBucketPath},
         'status': {'S': status}
     })
@@ -47,11 +47,12 @@ def lambda_handler(event, context):
     s3_resource = resource('s3')
     dynamodb = resource('dynamodb')
     table_dynamoDB = os.environ['DynamoDB_TABLE_NAME']
-    # bucket_ref_name = os.environ['s3_ref_bucket']
     bucket_data_name = bucket_output_name = os.environ['S3_BUCKET_NAME']
-    # table_dynamoDB = "simul-optistow-vessel"
-    bucket_ref_name = "optistow-referential-bucket"
-    # bucket_data_name = bucket_output_name = "optistow-preprocessing-test-out"
+    try:
+        bucket_ref_name = os.environ['s3_ref_bucket']
+    except:
+        bucket_ref_name = "optistow-referential-bucket"
+    
     try:
         reusePreviousResults = event["reusePreviousResults"]
     except:

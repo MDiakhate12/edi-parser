@@ -98,7 +98,16 @@ class AnomalyDetectionLayer():
             message = f"Missing {self.__edi_file_name_baplie_type_map['tank']}"
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, call_id)
-
+            
+    def check_loadlist_beyond_first_call(self, loadlist_flag: int, call_id: str) -> None:
+        # the function self.__add_single_anomaly is called more than once because two of the errors can exist at once
+        criticity = "Error"
+        if not(loadlist_flag):
+            message = f"Missing {self.__edi_file_name_baplie_type_map['container']}"
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, call_id)
+        
+        
     #In case of multiple EQD in one LOC is found 
     def check_missing_new_container_header(self, list_of_lists:list, folder_name: str, file_type:str) -> None:
         
@@ -810,7 +819,39 @@ class AnomalyDetectionLayer():
             for port, ter in missing_ports:
                 message = f"Port '{port}' not found for territory '{ter}'"
                 self.__add_single_anomaly("Error", message, f"Missing Port: {port} in cranes referential_file", file_type="rotations_intermediate")
+    
+    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str)->None:
+        for i, port in enumerate(port_codes_sim):
+                if port_codes_ref.count(port) == 0:
+                    message = f"Port: {port} in simulation is not found in referential for service_line {service_line}..."
+                    error_value = "TBD"
+                    self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
+        self.check_if_errors()
+            
+    def no_matching_port_check(self, port:str, index: int):
+        
+        message = f"could not match port {port} to a port from referential..."
+        error_value = "TBD"
+        self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index}")
+        
+    def check_out_of_order_ports(self, port_codes_ref:list, ref_port_index_list:list, referential_folder_name:list)->None:
+        filtered_list = [elem for elem in [i for i, port in enumerate(port_codes_ref)] if min(ref_port_index_list) <= elem <= max(ref_port_index_list) and elem in ref_port_index_list]
+        # Compare elements at each index and create a set of non-matching elements
+        # result_set = {elem1 for elem1, elem2 in zip(ref_port_index_list, filtered_list) if elem1 != elem2}
+        result_set = [{elem1, elem2} for elem1, elem2 in zip(ref_port_index_list, filtered_list) if elem1 != elem2]
+        # Convert the list of sets to a set of frozensets to get unique sets
+        unique_sets = set(frozenset(s) for s in result_set)
+        # self._AL.__add_single_anomaly()
+        
+        for mismatch_set in unique_sets:
+            elem1, elem2 = mismatch_set
+            index1 = ref_port_index_list.index(elem1)
+            index2 = ref_port_index_list.index(elem2)
+            message = f"Port {referential_folder_name[elem1][-5:]} at call_{index1} and Port {referential_folder_name[elem2][-5:]} at call_{index2} do not have a matching call sequence order between rotation and rotation referential..."
+            error_value = "TBD"
+            self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index1} & call_{index2}")
 
+    
     def validate_data(self, data_dict: dict) -> None:
         """
         Validates the data dictionary based on specific criteria.
