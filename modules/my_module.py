@@ -1,2 +1,2 @@
 def function_hello():
-    print("Hello from module.")
+    print("Hello from setup.")

@@ -6,7 +6,7 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="lambda_function/main.zip">
+    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="dist/aws-lambda-function.zip">
       <tags>
         <value>lambda-preprocessing-dev</value>
       </tags>
