@@ -6,5 +6,5 @@ setup(
     description='Project Pre-processing-CICD',
     include_package_data=True,
     zip_safe=False,
-    packages=find_packages(exclude=('tests', 'docs', 'sample'))
+    packages=find_packages(include=('main.py', 'modules'))
 )
