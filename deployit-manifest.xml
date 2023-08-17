@@ -6,7 +6,7 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="deployment_package_file">
+    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="lambda_function/main.zip">
       <tags>
         <value>lambda-preprocessing-dev</value>
       </tags>
@@ -17,23 +17,6 @@
       <outputMap />
       <projectId>10319</projectId>
     </aws.AwsLambdaPackageFile>
-    <aws.s3.File name="optistow-code-bucket-dev" file="deployment_package_file">
-      <tags>
-        <value>optistow-code-bucket-dev</value>
-      </tags>
-      <scanPlaceholders>true</scanPlaceholders>
-      <preScannedPlaceholders>false</preScannedPlaceholders>
-      <placeholders />
-      <checksum>0a82395032c8a5f0b6ab6e18a0f917aade040263f21252a16d3fedf4440f9fd9</checksum>
-      <fileEncodings>
-      <entry key=".+\.properties">ISO-8859-1</entry>
-      </fileEncodings>
-      <isRescanned>false</isRescanned>
-      <targetPathInBucket>post-processing</targetPathInBucket>
-      <acl>private</acl>
-    </aws.s3.File> 
   </deployables>
   <applicationDependencies />
 </udm.DeploymentPackage>
-
-
