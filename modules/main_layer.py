@@ -46,7 +46,7 @@ from modules.lashing_calculation_layer import Lashing
 from modules.vessel import Vessel
 from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
-from modules.dg_layer import DG
+#from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
 class MainLayer():
