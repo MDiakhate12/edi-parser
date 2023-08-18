@@ -1,11 +1,14 @@
 import pandas as pd
-
+import random
+import string
+import json
+from datetime import datetime
 from modules import common_helpers
 
 class AnomalyDetectionLayer():
-    def __init__(self) -> None:
+    def __init__(self, DL:object) -> None:
         self.__edi_file_name_baplie_type_map = {"onboard": "OnBoard.edi", "container": "LoadList.edi", "tank": "Tank.edi"}
-        
+        self._DL = DL
         # data_anomalies: defined as a class attribute so it would not have to be kept passing around
         self.__l_errors = []
         self.__error_num = 0
@@ -39,7 +42,7 @@ class AnomalyDetectionLayer():
         
         if criticity == "Warning": self.__warnings_count += 1
 
-    def __add_anmoalies_from_list(
+    def __add_anomalies_from_list(
             self,
             l_err_container_ids: list,
             criticity: str,
@@ -51,10 +54,21 @@ class AnomalyDetectionLayer():
         for container_id in l_err_container_ids:
             self.__add_single_anomaly(criticity, message, error_value, call_id, file_type, container_id)
 
-    def check_if_errors(self) -> None:
+    
+    def check_if_errors(self, error_log_path:str, s3_bucket:str="") -> None:
+        error_message = '\n'
         l_errors_len = len(self.__l_errors)
         if l_errors_len and l_errors_len != self.__warnings_count:
-            raise Exception(f"{self.__l_errors}")
+            error_message += ('\n').join(str(error) for error in self.__l_errors) + '\n'
+            lines = [json.dumps(error_dict) for error_dict in self.__l_errors]
+            self._DL.write_csv_lines(lines, error_log_path, s3_bucket)
+            raise Exception(error_message) 
+
+        
+    # def check_if_errors(self) -> None:
+        # l_errors_len = len(self.__l_errors)
+        # if l_errors_len and l_errors_len != self.__warnings_count:
+        #     raise Exception(f"{self.__l_errors}")
         
         ## For testing ##
         # if l_errors_len:
@@ -67,7 +81,7 @@ class AnomalyDetectionLayer():
     def check_onboard_edi(self, onboard_call: str, call_id: str) -> None:
         if not len(onboard_call):
             criticity = "Error"
-            message = f"Missing {self.__edi_file_name_baplie_type_map['onboard']}"
+            message = f"Missing {self.__edi_file_name_baplie_type_map['onboard']} "
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, call_id)
 
@@ -79,19 +93,41 @@ class AnomalyDetectionLayer():
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, call_id)
         
-        if not loadlist_flag:
+        elif not loadlist_flag:
             message = f"Missing {self.__edi_file_name_baplie_type_map['container']}"
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, call_id)
 
-        if not tank_flag:
+        elif not tank_flag:
             message = f"Missing {self.__edi_file_name_baplie_type_map['tank']}"
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, call_id)
+            
+    def check_loadlist_beyond_first_call(self, loadlist_flag: int, call_id: str) -> None:
+        # the function self.__add_single_anomaly is called more than once because two of the errors can exist at once
+        criticity = "Error"
+        if not(loadlist_flag):
+            message = f"Missing {self.__edi_file_name_baplie_type_map['container']}"
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, call_id)
+        
+        
+    #In case of multiple EQD in one LOC is found 
+    def check_missing_new_container_header(self, list_of_lists:list, folder_name: str, file_type:str) -> None:
+        
+        for sublist in list_of_lists:
+            eqd_indices = [i for i, item in enumerate(sublist) if item.startswith("EQD")]
+            
+            if len(eqd_indices) > 1:
+                criticity = "Error"
+                sublist_invalid_ids = [sublist[idx].split("+")[2].split(":")[0] for idx in eqd_indices]
+                message = f"Containers {sublist_invalid_ids} are under the same new container identifier."
+                error_value = "TBD"
+                self.__add_single_anomaly(criticity, message, error_value, folder_name, file_type)
 
     def check_extracted_containers_num(self, containers_in_baplie_num: int, containers_extracted_num: int, call_id: str, file_type: str) -> None:
-        contaienrs_num_diff = containers_in_baplie_num - containers_extracted_num
-        if contaienrs_num_diff:
+        containers_num_diff = containers_in_baplie_num - containers_extracted_num
+        if containers_num_diff:
             criticity = "Error"
             message = f"The number of extracted containers is not equal to the number of actual containers in the baplie"
             error_value = "TBD"
@@ -115,7 +151,7 @@ class AnomalyDetectionLayer():
             if container_id != container_id or container_id == "":
                 no_id_container_count += 1
                 l_containers_ids[i] = f"{call_id}_CN_{no_id_container_count}"
-        
+                # print(l_containers_ids[i])
         if no_id_container_count:
             criticity = "Warning"
             message = self.__get_full_msg("with a missing serial number")
@@ -125,17 +161,39 @@ class AnomalyDetectionLayer():
             df["EQD_ID"] = l_containers_ids
 
         return df
+        
+    def check_containers_with_no_identifier(self, df_attributes : pd.DataFrame, call_id : str) -> pd.DataFrame:
+            
+        df_weird_port_containers = df_attributes[df_attributes["EQD_TYPE_CODE_QUALIFIER"] == ""]
+        df_weird_port_containers_len = len(df_weird_port_containers)
+        if df_weird_port_containers_len:
+            criticity = "Warning"
+            message = self.__get_full_msg(f"{df_weird_port_containers_len} weird containers were found in {call_id}")
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, call_id)
+            df_attributes = df_attributes[~(df_attributes["EQD_TYPE_CODE_QUALIFIER"] == "")]
+        return df_attributes
 
     def check_containers_serial_nums_dups(self, df: pd.DataFrame, call_id: str, file_type: str) -> None:
         s_container_ids_dups = df["EQD_ID"].duplicated()
         l_container_id_dups = df[s_container_ids_dups]["EQD_ID"].tolist()
+ 
+        generated_serial_numbers = []
+        for i in df.loc[df['EQD_ID'].isin(l_container_id_dups)].index:
+            serial_number = "STOW" + ''.join(random.choices( string.digits, k=7))
+            generated_serial_numbers.append([i, df.iloc[i]["EQD_ID"] , serial_number, df.iloc[i]["LOC_147_ID"]])
+            #FIXME:A value is trying to be set on a copy of a slice from a DataFrame.
+            df.loc[i, "EQD_ID"] = serial_number
+        concatenated = ["{} at slot position {} was renamed to the following S/N: {} ".format(inner_list[1], inner_list[3], inner_list[2]) for inner_list in generated_serial_numbers]
+       
+#reactivate later            
         if s_container_ids_dups.sum():
-            # criticity = "Error"
             criticity = "Warning"
             message = self.__get_full_msg("with a duplicated serial number")
             error_value = "TBD"
-            self.__add_anmoalies_from_list(l_container_id_dups, criticity, message, error_value, call_id, file_type)
-
+            self.__add_anomalies_from_list(concatenated, criticity, message, error_value, call_id, file_type)
+        
+        
     def check_and_handle_POLs_names(
             self,
             df: pd.DataFrame,
@@ -305,6 +363,7 @@ class AnomalyDetectionLayer():
                     mapped_POD_name = d_rot_1st_4_chars_to_port_name_base[POD_name_1st_4_chars]
 
                 else:
+                    #reactivate Error status
                     # self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
                     self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
 
@@ -455,14 +514,14 @@ class AnomalyDetectionLayer():
         #     criticity = "Error"
         #     message = self.__get_full_msg("with an empty POL")
         #     error_value = "TBD"
-        #     self.__add_anmoalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
+        #     self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
 
         # l_err_container_ids = df[df["LOC_11_LOCATION_ID"]==""]["EQD_ID"].tolist()
         # if len(l_err_container_ids):
         #     criticity = "Error"
         #     message = self.__get_full_msg("with an empty POD")
         #     error_value = "TBD"
-        #     self.__add_anmoalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
+        #     self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
 
     def check_ISO_codes(self, df: pd.DataFrame, d_iso_codes_map: dict, call_id: str, file_type: str) -> None:
         d_old_iso_codes_size = d_iso_codes_map["old"]["length_ft"]
@@ -488,7 +547,7 @@ class AnomalyDetectionLayer():
 
             size_code = iso_code[0]
             height_code = iso_code[1]
-
+#reactivate late 
             if is_old:
                 if size_code not in d_old_iso_codes_size.keys() or height_code not in d_old_iso_codes_height.keys():
                     message = self.__get_full_msg("with an unknown old ISO code")
@@ -529,22 +588,23 @@ class AnomalyDetectionLayer():
         dups_count = pds_dups_bool_mask.sum()
         
         if dups_count:
-            # criticity = "Error"
-            criticity = "Warning"
+            criticity = "Error" 
+            # criticity = "Warning"
             message = self.__get_full_msg("with the same slot positions")
             error_value = "TBD"
 
             l_err_container_ids = df[pds_dups_bool_mask]["EQD_ID"].tolist()
-            self.__add_anmoalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
+            self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
 
     def check_filled_slots_in_LLs(self, df: pd.DataFrame, call_id: str, file_type: str) -> None:
         df_temp = df[df["LOC_147_ID"]!=""]
+## reactivate later
         if len(df_temp):
             criticity = "Warning"
             message = self.__get_full_msg("with a slot position in a loadlist")
             error_value = "TBD"
             l_err_container_ids = df_temp["EQD_ID"].tolist()
-            self.__add_anmoalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)        
+            self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)        
 
             df["LOC_147_ID"] = ""
 
@@ -556,7 +616,7 @@ class AnomalyDetectionLayer():
     #         error_value = "TBD"
     #         message = self.__get_full_msg("with a POD not in the rotation nor a past POL from the previous rotation")
 
-    #         self.__add_anmoalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
+    #         self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
 
     def check_flying_containers(
             self,
@@ -750,3 +810,112 @@ class AnomalyDetectionLayer():
             for container_info in l_reefers_at_non_reefer:
                 container_id = container_info[1]
                 self.__add_single_anomaly(criticity, message, error_value, container_id=container_id)
+
+
+    def check_missing_ports(self, rotation_intermediate, cranes_csv) -> None:
+        missing_ports = []
+
+        for i, ter in enumerate(rotation_intermediate['ShortName'].tolist()):
+            if ter not in cranes_csv['port'].tolist():
+                missing_ports.append((cranes_csv['port'].tolist()[i], ter))
+
+        if missing_ports:
+            for port, ter in missing_ports:
+                message = f"Port '{port}' not found for territory '{ter}'"
+                self.__add_single_anomaly("Error", message, f"Missing Port: {port} in cranes referential_file", file_type="rotations_intermediate")
+    
+    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str,dynamic_out_dir:str,s3_bucket:str )->None:
+        for i, port in enumerate(port_codes_sim):
+                if port_codes_ref.count(port) == 0:
+                    message = f"Port: {port} in simulation is not found in referential for service_line {service_line}..."
+                    error_value = "TBD"
+                    self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
+        self.check_if_errors(dynamic_out_dir, s3_bucket)
+            
+    def no_matching_port_check(self, port:str, index: int):
+        
+        message = f"could not match port {port} to a port from referential..."
+        error_value = "TBD"
+        self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index}")
+        
+    def check_out_of_order_ports(self, port_codes_ref:list, ref_port_index_list:list, referential_folder_name:list)-> list:
+        filtered_list = [elem for elem in [i for i, port in enumerate(port_codes_ref)] if min(ref_port_index_list) <= elem <= max(ref_port_index_list) and elem in ref_port_index_list]
+        # Compare elements at each index and create a set of non-matching elements
+        # result_set = {elem1 for elem1, elem2 in zip(ref_port_index_list, filtered_list) if elem1 != elem2}
+        result_set = [{elem1, elem2} for elem1, elem2 in zip(ref_port_index_list, filtered_list) if elem1 != elem2]
+        # Convert the list of sets to a set of frozensets to get unique sets
+        unique_sets = set(frozenset(s) for s in result_set)
+        # self._AL.__add_single_anomaly()
+        mismatching_ports = []
+        for mismatch_set in unique_sets:
+            elem1, elem2 = mismatch_set
+            index1 = ref_port_index_list.index(elem1)
+            index2 = ref_port_index_list.index(elem2)
+            message = f"Port {referential_folder_name[elem1][-5:]} at call_{index1} and Port {referential_folder_name[elem2][-5:]} at call_{index2} do not have a matching call sequence order between rotation and rotation referential..."
+            error_value = "TBD"
+            # reactivate later
+            # self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index1} & call_{index2}")
+            self.__add_single_anomaly("Warning", message, error_value, file_type=f"call_{index1} & call_{index2}")
+            mismatching_ports.append(message)
+        return mismatching_ports
+    
+    def check_if_no_output_postprocess(self, files_in_output:str, dynamic_out_dir:str, s3_bucket:str) -> None:
+        if "output.csv" not in files_in_output:
+            criticity = 'ERROR'
+            message = "There are no 'output.csv' result from CPLEX..."
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, file_type='output.csv')
+            self.check_if_errors(dynamic_out_dir, s3_bucket)
+            
+    def validate_data(self, data_dict: dict) -> None:
+        """
+        Validates the data dictionary based on specific criteria.
+
+        This function checks if the 'StdSpeed', 'Gmdeck', and 'MaxDraft' values in the data dictionary are numeric.
+        It also verifies that the 'worldwide' and 'service' values consist of alphabetic characters only and that
+        the 'worldwide' value is either 'UNRESTRICTED' or 'WORLDWIDE'.
+
+        Parameters:
+            data_dict (dict): The dictionary containing the data to be validated.
+
+        Returns:
+            bool: True if the data dictionary passes all validation checks, False otherwise.
+        """
+
+        for index, data_entry in data_dict.items():
+        # Check if 'StdSpeed', 'Gmdeck', and 'MaxDraft' are numeric
+                for key in ['StdSpeed', 'Gmdeck', 'MaxDraft']:
+                    try:
+                        float(data_entry[key])
+                    except:
+                        criticity = "Error"
+                        message = f"key {key} = '{data_entry[key]}'is not numeric..."
+                        error_value = "TBD"
+                        self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
+                
+                for key in ['WindowStartTime', 'WindowEndTime']:
+                    try:
+                        datetime.strptime(data_entry[key], "%Y-%m-%d %H:%M:%S")
+                    except:
+                        criticity = "Error"
+                        message = f"key {key} = '{data_entry[key]}'cannot be converted to Datetime..."
+                        error_value = "TBD"
+                        self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
+                                
+                if index == 0:    
+                    # Check if 'worldwide' and 'service' are alphabetic
+                    for key in ['worldwide', 'service']:
+                            if not data_entry[key].isalpha():
+                                criticity = "Error"
+                                message = f"key {key} = '{data_entry[key]} in rotation.csv is not alphabetic..."
+                                error_value = "TBD"
+                                self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
+                    
+                    # Check if 'worldwide' is either 'UNRESTRICTED' or 'WORLDWIDE'
+                    if data_entry['worldwide'].upper() not in ['UNRESTRICTED', 'WORLDWIDE']:
+                        criticity = "Error"
+                        message = f"key worldwide = '{data_entry['worldwide']}' in rotation.csv is not 'UNRESTRICTED' or 'WORLDWIDE'..."
+                        error_value = "TBD"
+                        self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
+
+                

@@ -4,13 +4,13 @@ import csv
 import json
 import os
 import io
-
+import shutil
 import logging
 
 #TODO check unused functions
 
 class DataLayer():
-    def __init__(self, logger: logging.Logger, s3_bucket: str="", s3_prefix: str="") -> None:
+    def __init__(self, logger: logging.Logger, s3_bucket_out: str="", s3_bucket_in: str="", s3_prefix: str="") -> None:
         """
         Class Contsructor, takes the terminal arguments as a list. Think of DataLayer as a way to communicate with
         the outside world, e.g., reading, editing, and saving files, communicating with databases, etc...
@@ -24,45 +24,61 @@ class DataLayer():
         None
         """
         self.__logger = logger
-        self.__s3_bucket = s3_bucket
+        self.__s3_bucket_out = s3_bucket_out
+        self.__s3_bucket_in = s3_bucket_in
         self.__s3_prefix = s3_prefix
         self.__logger = logger
 
-        if s3_bucket == "": self.__is_local = True
+        if self.__s3_bucket_out == "" and self.__s3_bucket_in == "": self.__is_local = True
         else: self.__is_local = False
 
-    def __read_file_from_s3(self, file_path: str) -> str:
+    def __read_file_from_s3(self, file_path: str, s3_bucket: str="") -> str:
         s3 = boto3.resource("s3")
-        
         key = self.__s3_prefix + file_path
         try:
-            obj = s3.Object(self.__s3_bucket, key)
+            obj = s3.Object(s3_bucket, key)
             #content = obj.get()["Body"].read().decode("utf-8")
         except Exception as e:
-
             self.__logger.info(e)
             return ""
         else:
-            self.__logger.info("read_file_from_s3 => OK")
+            #self.__logger.info("read_file_from_s3 => OK")
             #self.__logger.info(content)
             return obj.get()["Body"].read().decode("utf-8")#content
-    
-    def __write_file_to_s3(self, file_content: str, file_path: str) -> None:
+                
+    def __write_file_to_s3(self, file_content: str, file_path: str, s3_bucket: str="") -> None:
         s3 = boto3.client("s3")
         key = self.__s3_prefix + file_path
-        s3.put_object(Body=file_content, Bucket=self.__s3_bucket, Key=key)
+        s3.put_object(Body=file_content, Bucket=s3_bucket, Key=key)
 
-    def read_csv(self, csv_path: str, na_values: list, sep: str=";") -> pd.DataFrame:
+    def read_xlsx(self, xlsx_path: str, na_values: list, s3_bucket: str="", sheet: str=None) -> pd.DataFrame:
+        
+        if self.__is_local:
+            if sheet:
+                df = pd.read_excel(xlsx_path, na_values=na_values, dtype=str, sheet_name=sheet)
+            else: 
+                df = pd.read_excel(xlsx_path, na_values=na_values, dtype=str)
+        else:
+            csvStringIO = io.StringIO(self.__read_file_from_s3(xlsx_path, s3_bucket))
+            if sheet:
+                df = pd.read_excel(csvStringIO, na_values=na_values, dtype=str, sheet_name=sheet)
+            else: 
+                df = pd.read_excel(csvStringIO, na_values=na_values, dtype=str)
+        
+        return df  
+    
+    
+    def read_csv(self, csv_path: str, na_values: list, sep: str=";", s3_bucket: str="") -> pd.DataFrame:
         if self.__is_local:
             df = pd.read_csv(csv_path, sep=sep, na_values=na_values, dtype=str)
         
         else:
-            csvStringIO = io.StringIO(self.__read_file_from_s3(csv_path))
+            csvStringIO = io.StringIO(self.__read_file_from_s3(csv_path, s3_bucket))
             df = pd.read_csv(csvStringIO, sep=sep, na_values=na_values, dtype=str)
         
         return df
     
-    def read_csv_lines(self, csv_path: str, new_line: str="", encoding: str="utf-8", skip_first_line: bool=False) -> list:
+    def read_csv_lines(self, csv_path: str, s3_bucket: str="", new_line: str="", encoding: str="utf-8", skip_first_line: bool=False) -> list:
         if self.__is_local:
             lines = []
             with open(csv_path, "r", encoding=encoding) as f:
@@ -74,7 +90,7 @@ class DataLayer():
                     lines.append(line.rstrip(new_line))
         
         else:
-            lines = self.__read_file_from_s3(csv_path).splitlines()
+            lines = self.__read_file_from_s3(csv_path, s3_bucket).splitlines()
         
         return lines
 
@@ -90,15 +106,15 @@ class DataLayer():
     #         s3.put_object(Body=(bytes(json.dumps(event).encode('UTF-8'))), Bucket=self.__s3_bucket, Key=json_path)
     #         #self.__write_file_to_s3(event, json_path)
         
-    def write_csv(self, df: pd.DataFrame, csv_path: str, sep: str=";", encoding: str="utf-8") -> None:
+    def write_csv(self, df: pd.DataFrame, csv_path: str, s3_bucket: str="", sep: str=";", encoding: str="utf-8") -> None:
         if self.__is_local:
             df.to_csv(csv_path, index=False, sep=sep, encoding=encoding)
         
         else:
             df_csv = df.to_csv(index=False, sep=sep, encoding=encoding)
-            self.__write_file_to_s3(df_csv, csv_path)
+            self.__write_file_to_s3(df_csv, csv_path, s3_bucket)
     
-    def write_csv_lines(self, lines: list, csv_path: str, sep: str=";", new_line: str="", encoding: str="utf-8") -> None:
+    def write_csv_lines(self, lines: list, csv_path: str, s3_bucket: str="", sep: str=";", new_line: str="", encoding: str="utf-8") -> None:
         if self.__is_local:
             with open(csv_path, "w", newline=new_line, encoding=encoding) as csv_file:
                 writer = csv.writer(csv_file, delimiter=sep)
@@ -111,9 +127,9 @@ class DataLayer():
             df.columns = df.iloc[0]
             df = df.iloc[1:, :]
             df_csv = df.to_csv(index=False, sep=sep, encoding=encoding)
-            self.__write_file_to_s3(df_csv, csv_path)
+            self.__write_file_to_s3(df_csv, csv_path, s3_bucket)
     
-    def list_files_in_path(self, path) -> list:
+    def list_files_in_path(self, path, s3_bucket: str="") -> list:
         if self.__is_local:
             #self.__logger.info("list files in path from local")
             #file_list = os.listdir(path)
@@ -122,8 +138,8 @@ class DataLayer():
         else:
             self.__logger.info("list files in path from s3")
             s3 = boto3.resource("s3")
-            bucket = s3.Bucket(self.__s3_bucket)
-            #self.__logger.info(f"self.__s3_prefix + path : {self.__s3_prefix + path}")
+            bucket = s3.Bucket(s3_bucket)
+            self.__logger.info(f"self.__s3_prefix + path : {self.__s3_prefix + path}")
             file_list = []
             for object_summary in bucket.objects.filter(Prefix=self.__s3_prefix + path + "/"):
                 #self.__logger.info(f"key: {object_summary.key}")
@@ -131,9 +147,10 @@ class DataLayer():
             #file_list = file_list[1:]
         #self.__logger.info(file_list)
         return list(filter(None, file_list))
-    def list_folders_in_path(self, path) -> list:
+        
+    def list_folders_in_path(self, path, s3_bucket: str="") -> list:
         if self.__is_local:
-            #self.__logger.info("list files in path from local")
+            self.__logger.info("list files in path from local")
             #file_list = os.listdir(path)
             folders_list = [folder for folder in os.listdir(path) if os.path.isdir(os.path.join(path, folder))]
         
@@ -141,7 +158,7 @@ class DataLayer():
             self.__logger.info("list folders in path from s3")
             
             s3 = boto3.client("s3")
-            response = s3.list_objects_v2(Bucket=self.__s3_bucket, Delimiter = '/', Prefix=self.__s3_prefix + path + "/")            
+            response = s3.list_objects_v2(Bucket=s3_bucket, Delimiter = '/', Prefix = path + "/")            
             
             folders_list = []
             for prefix in response['CommonPrefixes']:
@@ -154,23 +171,43 @@ class DataLayer():
 
         return folders_list
     
-    def read_file(self, file_path: str) -> str:
+    def copy_file_loadlist(self, source_key:str, destination_key:str, source_bucket_name:str="", destination_bucket_name:str="") -> None:
+        if self.__is_local:
+            # Copy the file locally
+            source_file = os.path.join(source_bucket_name, source_key)
+            destination_file = os.path.join(destination_bucket_name, destination_key)
+            shutil.copy(source_file, destination_file)
+        else:
+            destination_key = os.path.join(destination_key, "LoadList.edi")
+            # Copy the file from S3 to S3
+            s3 = boto3.client('s3')
+            copy_source = {
+                'Bucket': source_bucket_name,
+                'Key': source_key
+            }
+            s3.copy_object(
+                Bucket=destination_bucket_name,
+                CopySource=copy_source,
+                Key=destination_key
+            )
+            
+    def read_file(self, file_path: str, s3_bucket: str="") -> str:
         if self.__is_local:
             with open(file_path, "r") as f:
                 return f.read()
 
         else:
-            return self.__read_file_from_s3(file_path)
+            return self.__read_file_from_s3(file_path, s3_bucket)
 
-    def write_file(self, file_content: str, file_path: str) -> None:
+    def write_file(self, file_content: str, file_path: str, s3_bucket: str="") -> None:
         if self.__is_local:
             with open(file_path, "w") as f:
                 f.write(file_content)
 
         else:
-            self.__write_file_to_s3(file_content, file_path)
+            self.__write_file_to_s3(file_content, file_path, s3_bucket)
 
-    def read_json(self, file_path: str) -> dict:
+    def read_json(self, file_path: str, s3_bucket: str="") -> dict:
         
         if self.__is_local:
             
@@ -179,7 +216,7 @@ class DataLayer():
         
         else:
             
-            file_content = self.__read_file_from_s3(file_path)
+            file_content = self.__read_file_from_s3(file_path, s3_bucket)
             
             return  json.loads(file_content)
 
@@ -218,7 +255,7 @@ class DataLayer():
 
         return delimiter
 
-    def read_baplie_as_list(self, baplie_path: str) -> list:
+    def read_baplie_as_list(self, baplie_path: str, s3_bucket:str) -> list:
         """
         The baplie file is read as a single string, where the end of every segment is indicated by a signle quote.
         This function splits the baplie message into segments based on the single quote, where it returns a list 
@@ -235,7 +272,7 @@ class DataLayer():
         """
         # f_baplie = open(baplie_path, 'r')
         # baplie_message = f_baplie.read()
-        baplie_message = self.read_file(baplie_path)
+        baplie_message = self.read_file(baplie_path, s3_bucket)
         segment_delimiter = self.get_baplie_delimiter(baplie_message)
         segments_list = baplie_message.split(segment_delimiter)
 
@@ -248,7 +285,7 @@ class DataLayer():
 
         return segments_list
         
-    def __get_baplie_list_no_header(self, segments_list: list, baplie_path: str, folder_name: str, file_name: str) -> list:
+    def __get_baplie_list_no_header(self, segments_list: list, baplie_path: str, folder_name: str, file_name: str, s3_bucket:str) -> list:
         """
         As the header message does not contain relevant information for the desired output CSV file,
         this function takes the list of segments generated by baplie_to_list() (func in this module) and
@@ -265,7 +302,7 @@ class DataLayer():
             a list where every element is a segment (str) from the input baplie message but without the segments
             coming from the header of the input baplie message
         """
-        segments_list = self.read_baplie_as_list(baplie_path)
+        segments_list = self.read_baplie_as_list(baplie_path, s3_bucket)
         # the first line after the header will always start with LOC
         # flag: the value -1 is impossible for the index of the first LOC that identifies the start of info for the first container
         first_segment_in_body_idx = -1
@@ -279,6 +316,7 @@ class DataLayer():
             #TODO add an else statement to check if any headers from the body exists and throw an error?
         
         if first_segment_in_body_idx != -1:
+            
             return segments_list[first_segment_in_body_idx:]
 
         else:
@@ -439,7 +477,7 @@ class DataLayer():
         file_name = baplie_path.split("/")[-1].replace(".edi", "")
         return file_name
 
-    def read_baplie_body_as_list(self, baplie_path: str, folder_name: str, file_name: str) -> 'tuple[list, str]':
+    def read_baplie_body_as_list(self, baplie_path: str, folder_name: str, file_name: str, s3_bucket:str) -> 'tuple[list, str]':
         """
         Takes no argument and reads the baplie message by calling the other functions from this class in the right order.
         This functions is like main in this class.
@@ -461,8 +499,8 @@ class DataLayer():
         if baplie_type_from_file_name is None: # failed to identify the baplie type
             return None, None, None, None
         
-        segments_list = self.read_baplie_as_list(baplie_path)
-        segments_list_no_header = self.__get_baplie_list_no_header(segments_list, baplie_path, folder_name, file_name)
+        segments_list = self.read_baplie_as_list(baplie_path, s3_bucket)
+        segments_list_no_header = self.__get_baplie_list_no_header(segments_list, baplie_path, folder_name, file_name, s3_bucket)
         if segments_list_no_header is None: # failed to identify the start of the body in the baplie
             return None, None, None, None
 
@@ -550,9 +588,12 @@ class DataLayer():
         df = pd.DataFrame(dict_to_save)
         df.to_csv(path_to_save, index=False)
 
-    def output_bayplan_edi(self, path: str, baplie_delimiter: str, l_all_segments: list) -> None:
+    def output_bayplan_edi(self, path: str, baplie_delimiter: str, l_all_segments: list, s3_bucket: str) -> None:
         baplie_message = baplie_delimiter.join(l_all_segments) + baplie_delimiter
-        self.write_file(baplie_message, path)
+        if self.__is_local:
+            self.write_file(baplie_message, path)
+        else: 
+            self.__write_file_to_s3(baplie_message, path, s3_bucket)
         # f_edi_result = open(path, "w")
         # f_edi_result.write(baplie_message)
         # f_edi_result.close()
