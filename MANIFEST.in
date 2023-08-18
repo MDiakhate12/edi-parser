@@ -1,3 +1,5 @@
 include main.py
 include modules/*
 exclude setup.py
+exclude MANIFEST.in
+prune Pre_processing_CICD.egg-info
