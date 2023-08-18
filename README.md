@@ -13,6 +13,7 @@ __Important__: The CICD pipeline creates the zip file by using the `python setup
 import sys
 sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 ```
+To avoid this step, the CICD function should apply a process similar to the one described [here](https://docs.aws.amazon.com/lambda/latest/dg/python-package.html#python-package-create-dependencies). This would avoid also using the `setup.py` and `MANIFEST.in`, and so make the maintainance of lambda functions easier.
 
 ## SAM
 The SAM framework provided by AWS allows us to test our lambda function locally. For this you need to install:
