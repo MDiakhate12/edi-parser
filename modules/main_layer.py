@@ -10,9 +10,9 @@ import logging
 # Set up the root logger with the desired log level and format
 
 
-# # Disable the default stream handler of the root logger
-# root_logger = logging.getLogger()
-# root_logger.handlers = []
+# Disable the default stream handler of the root logger
+root_logger = logging.getLogger()
+root_logger.handlers = []
 
 # # Create a file handler with 'w' filemode to truncate the file
 # file_handler = logging.FileHandler('log_file.log', mode='w')
@@ -26,16 +26,16 @@ import logging
 # root_logger.addHandler(file_handler)
 
 # # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # # # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
 
 # # # # Add the console handler to the root logger
-# root_logger.addHandler(console_handler)
+root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
@@ -46,6 +46,7 @@ from modules.lashing_calculation_layer import Lashing
 from modules.vessel import Vessel
 from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
+from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
 class MainLayer():
@@ -62,21 +63,21 @@ class MainLayer():
         path = d_event_json.get("path", "")
         
         self.__simulation_id = d_event_json["simulation_id"]
-        self.__vessel_id = d_event_json["vesselImo"]
-        self.__target_port = d_event_json["port"]
+        self.__vessel_id = d_event_json.get("vesselImo", "")
+        self.__target_port = d_event_json.get("port", "")
         self.__reuse_previous_results = reusePreviousResults
         self.__s3_bucket_out = s3_bucket_out
         self.__s3_bucket_in = s3_bucket_in
         logger.info(f"self.__reuse_previous_results : {self.__reuse_previous_results}")
         
         ## DG RULES if Master or Slot
-        self.__DG_Rules = d_event_json["dg_exception_rules"]
+        self.__DG_Rules = d_event_json.get("dg_exception_rules", "")
         
         ## directories
         self.__init_file_paths_from_event(path, self.__simulation_id, self.__s3_bucket_out)
         
         ## initialize anomaly detection
-        self.__AL = AL()
+        self.__AL = AL(self.__DL)
 
         # for reading, writing, and mapping functionalities
         self.__l_baplies_filepaths = []
@@ -127,6 +128,7 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = f"{self.__static_in_dir}/costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  f"{self.__static_in_dir}/costs/fuelCosts.csv"
             self.__consumption = f"{self.__static_in_dir}/schedules_temp/conso_apiPreVsProdVsInterp.csv"
+            
         else:
             bucket_path = f"s3://{s3_bucket}"
             simulation_dir = f"{simulation_id}"
@@ -141,10 +143,12 @@ class MainLayer():
             
         self.__dynamic_in_dir = f"{simulation_dir}/in"
         self.__py_scripts_out_dir = f"{simulation_dir}/intermediate"
+        
         self.__all_containers_csv_path = f"{self.__py_scripts_out_dir}/csv_combined_containers.csv"
         self.__rotation_intermediate_path = f"{self.__dynamic_in_dir}/rotation.csv"
         
         self.__cplex_out_dir = f"{simulation_dir}/out"
+        self.__error_log_path = f"{self.__cplex_out_dir}/error.csv"
        
     def __get_first_two_ports_baplie_and_csv_paths(self, baplies_dir: str, file_name: str, folder_name: str) -> None:
         """
@@ -302,7 +306,7 @@ class MainLayer():
         d_stacks_rows_by_bay_row_deck = self.__ML.get_d_stacks_rows_by_bay_row_deck(df_stacks)
         
         self.__AL.check_flying_containers(d_container_info_by_bay_row_tier, d_stacks_rows_by_bay_row_deck, d_type_to_size_map)
-        self.__AL.check_if_errors()
+        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
         
         onboard_csv_name = f"{self.__vessel_id} Containers OnBoard Loadlist 0.csv"
         onboard_csv_path = f"{self.__py_scripts_out_dir}/{onboard_csv_name}"
@@ -323,8 +327,9 @@ class MainLayer():
     
     
         naming_schema = d_DG_enrichment_map["DG_LOADLIST_SCHEMA"]
-        df_DG_loadlist = self.__PL.get_df_DG_loadlist_exhaustive(df_all_containers, naming_schema)
         
+        df_DG_loadlist = self.__PL.get_df_DG_loadlist_exhaustive(df_all_containers, naming_schema)
+        # df_DG_loadlist.to_csv("output_old.csv")
         # fill for now as all "x"
         # Need to explore type of for any indicator to other than closed freight container 
         # Assumption is all containers are closed and and DGs' are in packing 
@@ -788,7 +793,7 @@ class MainLayer():
             )
 
         self.__AL.check_reefer_containers_at_non_reefer_slots(l_reefers_at_non_reefer)
-        self.__AL.check_if_errors()
+        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
 
         stowing_info_csv_name = f"{self.__vessel_id} Containers Stowing Info 0.csv"
         stowing_info_csv_path = f"{self.__py_scripts_out_dir}/{stowing_info_csv_name}"
@@ -1198,8 +1203,8 @@ class MainLayer():
             # imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" 
             
             imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str)
-          
-                
+        
+        
             df_DG_loadlist = self.__output_DG_loadlist(df_all_containers, d_DG_enrichment_map, imdg_codes_df)
 
             df_DG_classes_expanded_updated = self.__output_adjusted_table_7_2_4( df_DG_classes_expanded, df_DG_loadlist)
@@ -1908,24 +1913,25 @@ class MainLayer():
         self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
         rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
         self.logger.info("Reading stevedoring cost from referential costs folder...")
-        RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
+        RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in, sep=";")
         self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+        rotation_intermediate = rotation_intermediate.iloc[:len(self.__d_seq_num_to_port_name)-1]
         self.logger.info("Reading consumption csv file from referential vessels folder...")
         consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
         self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")
         lashing_parameters_dict = extract_as_dict(rotation_intermediate, indexes=None, columns=['CallFolderName', 'StdSpeed', 'Gmdeck', 'MaxDraft', 'worldwide', 'service', 'WindowStartTime', 'WindowEndTime'])
         self.__AL.validate_data(lashing_parameters_dict)
-        self.__AL.check_if_errors()
+        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
         self.logger.info("*"*80)
         
         # # Intialize worst cast files generation 
-        self.__service_code = lashing_parameters_dict[1]['service']
+        self.__service_code = lashing_parameters_dict[0]['service']
         self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
         if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
             self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
             EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
-            self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__s3_bucket_in, self.__s3_bucket_out)
+            self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__error_log_path, self.__s3_bucket_in, self.__s3_bucket_out)
             self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
 
             # Check if all LoadLists exist after generation
@@ -1935,11 +1941,14 @@ class MainLayer():
                 call_id = "_".join(folder_name_split[-2:])
                 loadlist_flag = 0 
                 for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                    if i <2:
+                        loadlist_flag = 1
                     if i >= 2:
                             if file_name == "LoadList.edi": 
                                 loadlist_flag = 1
                 self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
-            self.__AL.check_if_errors()
+                
+            self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
         else: 
             self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
         self.logger.info("*" * 80)    
@@ -1980,15 +1989,14 @@ class MainLayer():
             d_main_to_sub_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/main_sub_segments_map.json", s3_bucket=self.__s3_bucket_in)
 
             df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
-            
+
             self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
 
             if baplie_type_from_file_name == baplie_type_from_content:
+
                 if baplie_type_from_file_name == "container":
-                    #
                     df_attributes = self.__AL.check_containers_with_no_identifier(df_attributes, call_id) 
 
-                        
                     # in case any container has no EQD_ID
                     df_attributes = self.__AL.fill_containers_missing_serial_nums(df_attributes, call_id, file_type, baplie_type_from_file_name)
                     
@@ -2071,7 +2079,10 @@ class MainLayer():
                                df_attributes[col] = ""
 
                     df_attributes = self.__add_lowest_DGS_cols_to_df(df_attributes, d_csv_cols_to_segments_map)
+                    
                     df_rotation = df_attributes[['EQD_ID', 'LOC_9_LOCATION_ID', 'LOC_11_LOCATION_ID']]
+
+    
                     #NOTE consider these 2 lines
                     # l_non_empty_cols = [ col for col in df_all_containers.columns if sum(df_all_containers[col].astype(bool)) ]
                     # df_all_containers = df_all_containers[l_non_empty_cols]
@@ -2080,8 +2091,8 @@ class MainLayer():
 
                     l_dfs_containers.append(df_attributes)
                     l_dfs_rotation_containers.append(df_rotation)
-                    
                     l_containers_folder_names.append(folder_name)
+
                 elif baplie_type_from_file_name == "tank":
                     l_dfs_tanks.append(df_attributes)
                     l_tanks_baplies_paths.append(baplie_path)
@@ -2095,19 +2106,18 @@ class MainLayer():
 
             else: continue
             
-        self.__AL.check_if_errors() 
+        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
         
         self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         fuel_data_dict = fuel_costs_df.set_index('FUEL_TYPE')['COST_USD'].to_dict()
         self.logger.info("Generating final rotation.csv...")
-        rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict)
-        #reactivate
+        rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, l_containers_folder_names, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict)
         df_rotation_final = rotations.get_rotations_final()
         rotation_csv_name = "rotation.csv"
         rotation_csv_path = f"{self.__py_scripts_out_dir}/{rotation_csv_name}"
         self.__DL.write_csv(df_rotation_final, rotation_csv_path, s3_bucket=self.__s3_bucket_out)
-        # 
+        
         # saving after to save time as an error might be thrown before
         for i, df in enumerate(l_dfs_containers):
             folder_name = l_containers_folder_names[i]
@@ -2139,14 +2149,22 @@ class MainLayer():
         self.__DL.write_csv(df_all_containers, self.__all_containers_csv_path, s3_bucket=self.__s3_bucket_out)
 
         df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
-
+        # start here
+        # d_DG_enrichment_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_enrichment_map.json", self.__s3_bucket_in)
+        # imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
+        # imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str) 
+        # naming_schema = d_DG_enrichment_map["DG_LOADLIST_SCHEMA"] 
+        # dg_instance = DG(self.logger, vessel, df_all_containers, d_DG_enrichment_map, DG_rules, imdg_codes_df)
+        # df = dg_instance.output_DG_loadlist()
+        # df.to_csv("output.csv")
+        
         self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
-                            
-        df_tanks_final = pd.concat(l_dfs_tanks, axis=0, ignore_index=True)
-        df_tanks_final.fillna("", inplace=True)
-        all_tanks_csv_name = "csv_combined_tanks.csv"
-        all_tanks_csv_path = f"{self.__py_scripts_out_dir}/{all_tanks_csv_name}"
-        self.__DL.write_csv(df_tanks_final, all_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
+        if len(l_dfs_tanks):                    
+            df_tanks_final = pd.concat(l_dfs_tanks, axis=0, ignore_index=True)
+            df_tanks_final.fillna("", inplace=True)
+            all_tanks_csv_name = "csv_combined_tanks.csv"
+            all_tanks_csv_path = f"{self.__py_scripts_out_dir}/{all_tanks_csv_name}"
+            self.__DL.write_csv(df_tanks_final, all_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")
@@ -2232,6 +2250,7 @@ class MainLayer():
         l_containers_ids = []
         containers_count = 0 # for logging
         for i, csv_path in enumerate(self.__l_POL_POD_csvs_paths):
+            
             df  = self.__DL.read_csv(csv_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
             df = self.__PL.process_slots(df, 1, True)
             l_containers_ids_temp = df["EQD_ID"].tolist()   
@@ -2376,22 +2395,20 @@ class MainLayer():
         
 
     def __run_reexecution(self) -> None:
-        d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
-     
+        
+        files_in_output = self.__DL.list_files_in_path(self.__cplex_out_dir, self.__s3_bucket_out)
+        self.__AL.check_if_no_output_postprocess(files_in_output, self.__error_log_path, self.__s3_bucket_out)
+        
         df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output()
-        
-        
+            
         df_all_containers, df_filled_slots = self.__update_csvs_with_CPLEX_output(d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys)
-    
-
-        #TODO fix repetition of grouping with DG classes: decouple repetition of steps between pre- and post-processing
-        df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
-        # df_DG_classes_grouped = self.__PL.get_df_DG_classes_grouped(df_all_containers, df_DG_classes_expanded)
-        
-        self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
+            # df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
+            # # df_DG_classes_grouped = self.__PL.get_df_DG_classes_grouped(df_all_containers, df_DG_classes_expanded)
+            # self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
 
         self.__output_bayplan(df_cplex_out, d_cplex_containers_slot_by_id)
         
+      
     def run_main(self) -> None:
         if not self.__reuse_previous_results:
             self.logger.info("Run first execution")

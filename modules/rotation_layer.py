@@ -5,7 +5,7 @@ from modules.common_helpers import nearest_neighbor_interpolation, get_datetime_
 import datetime 
 
 class rotation():
-    def __init__(self, logger: logging.Logger, vessel: object, rotation_intermediate: pd.DataFrame, l_dfs_containers_POL_POD: pd.DataFrame, d_seq_num_to_port_name: dict, rotation_csv_map: dict, df_shifting_rates:pd.DataFrame, consumption_df:pd.DataFrame, fuel_data_dict: dict) -> None:
+    def __init__(self, logger: logging.Logger, vessel: object, rotation_intermediate: pd.DataFrame, l_dfs_containers_POL_POD: pd.DataFrame, l_containers_folder_names:list, d_seq_num_to_port_name: dict, rotation_csv_map: dict, df_shifting_rates:pd.DataFrame, consumption_df:pd.DataFrame, fuel_data_dict: dict) -> None:
         self.logger = logger
         self.__vessel_id = vessel.get_imo()
         self.rotations_intermediate = rotation_intermediate
@@ -14,12 +14,12 @@ class rotation():
         self.fuel_data_dict = fuel_data_dict
         self.df_shifting_rates = df_shifting_rates
         self.l_dfs_containers_POL_POD = l_dfs_containers_POL_POD
+        self.l_containers_folder_names = l_containers_folder_names
         self.d_seq_num_to_port_name = d_seq_num_to_port_name
         self.d_port_name_to_seq_num = {value: key for key, value in self.d_seq_num_to_port_name.items()}
         self.ports_count = len(self.d_seq_num_to_port_name)
         self.__rotation_csv_map = rotation_csv_map
         self.l_ports_names = [self.d_seq_num_to_port_name[i] for i in range(self.ports_count)]
-
 
     def __process_df_intermediate_rotation(self) -> dict:
         
@@ -32,7 +32,7 @@ class rotation():
         self.rotations_intermediate["nb_moves_calc"] = 0 # this is for calculating the number of moves required for each port
         l_records = self.rotations_intermediate.to_dict(orient="records")
         d_rotation = { record["ShortName"]: record for record in l_records }
-
+    
         return d_rotation
     
     
@@ -56,6 +56,7 @@ class rotation():
             return updated_dict2
         
     def __add_num_moves_to_d_rotation_pol(self, df_port_containers: pd.DataFrame, d_rotation: dict, port_name: str, port_num: int) -> dict:
+
         if port_num != 0:
             try:
                 d_rotation[port_name]["nb_moves_calc"] += len(df_port_containers[df_port_containers["LOC_9_LOCATION_ID"].str.contains(port_name)]) # add number of containers in loadlist edi of port_name
@@ -95,23 +96,28 @@ class rotation():
                     ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) &
                     ( [ terminal_code in code for code in self.df_shifting_rates["TERMINAL_CODE"] ] )
                 ]
-
+        # if not len(df_temp):
+        #     df_temp = self.df_shifting_rates[
+        #             ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) 
+        #     ]
         df_temp = df_temp[
                         ( [ "0001" in code for code in df_temp["CARRIER_CODE"] ] ) &
                         (
                             ( df_temp["SERVICE_CODES"] == "ALL" ) |
-                            ( df_temp["SERVICE_CODES"] == "COLSUEZ" )
+                            ( df_temp["SERVICE_CODES"] == "COLSUEZ")
                         )
                 ]
 
         if not len(df_temp):
+            d_rotation[port_name]["LongName"] = ""
             d_rotation[port_name]["CostRw20"] = ""
             d_rotation[port_name]["CostRw40"] = ""
             d_rotation[port_name]["CostRw45"] = ""
-        d_rotation[port_name]["LongName"] = df_temp["POINT_NAME"].iloc[0]
-        d_rotation[port_name]["CostRw20"] = df_temp["TARIFF_20_FULL_SQS"].iloc[0]
-        d_rotation[port_name]["CostRw40"] = df_temp["TARIFF_40_FULL_SQS"].iloc[0]
-        d_rotation[port_name]["CostRw45"] = df_temp["TARIFF_45_FULL_SQS"].iloc[0]
+        else:
+            d_rotation[port_name]["LongName"] = df_temp["POINT_NAME"].iloc[0]
+            d_rotation[port_name]["CostRw20"] = df_temp["TARIFF_20_FULL_SQS"].iloc[0]
+            d_rotation[port_name]["CostRw40"] = df_temp["TARIFF_40_FULL_SQS"].iloc[0]
+            d_rotation[port_name]["CostRw45"] = df_temp["TARIFF_45_FULL_SQS"].iloc[0]
     
     def __add_fuel_cons_to_d_rotation(self, d_rotation: dict, port_name: str, key: str, target_key: str):
         
@@ -143,18 +149,24 @@ class rotation():
     ) -> 'tuple[float, float, float, float]':
 
         Std_time_at_sea = get_str_time_as_timedelta(d_rotation[port_name]["StdTimeAtSea"])
+
+        # Std_time_at_sea = float(d_rotation[port_name]["DistToNext"]) / float(d_rotation[port_name]["StdSpeed"])
+        # hours = int(Std_time_at_sea)  # Get the integer part of the float
+        # minutes = int((Std_time_at_sea - hours) * 60)  # Calculate the minutes
+
+        # Std_time_at_sea = datetime.timedelta(hours=hours, minutes=minutes) 
         Time_in =  get_str_time_as_timedelta(d_rotation[port_name]["TimeIn"])
         Time_out = get_str_time_as_timedelta(d_rotation[port_name]["TimeOut"])
         time_diff_days = Std_time_at_sea + Time_in + Time_out
         time_diff_hours = get_datetime_diff_by_unit(time_diff_days, unit="h")
 
-        opt_cranes_num = d_rotation[port_name]["nb_cranes_optimal"]
-        speed_single = d_rotation[port_name]["SpeedSingle"]
-        nb_moves = d_rotation[port_name]["nb_moves_calc"]
-        proforma_cranes_num = d_rotation[port_name]["nb_cranes_proforma"]
+        opt_cranes_num = float(d_rotation[port_name]["NbCranes"])
+        speed_single = float(d_rotation[port_name]["SpeedSingle"])
+        nb_moves = float(d_rotation[port_name]["nb_moves_calc"])
+        proforma_cranes_num = float(d_rotation[port_name]["NbCranesProforma"])
+        
         time_max = nb_moves / (proforma_cranes_num * speed_single)
         time_max_rounded = round(time_max, 2)
-
         time_min = nb_moves / (opt_cranes_num * speed_single)
         time_min_rounded = round(time_min, 2)
         
@@ -172,17 +184,18 @@ class rotation():
 
         distance_to_next = d_rotation[port_name]["DistToNext"]
         time_max_min_diff_hours = time_max - time_min
-
+        
         speed_min_temp = distance_to_next / (time_diff_hours + time_max_min_diff_hours)
         speed_min = max([8, speed_min_temp])
         speed_min_rounded = round(speed_min, 2)
-        
+
         speed_max_temp = distance_to_next / time_diff_hours
         speed_max = max([8, speed_max_temp])
         speed_max_rounded = round(speed_max, 2)
+
         d_rotation[port_name]["speed_max"] = speed_max_rounded
         d_rotation[port_name]["speed_min"] = speed_min_rounded
-
+       
 
     
     def __calculate_fuel_consumption_plan_and_price(self, d_rotation: dict, port_name: str)->None:
@@ -251,14 +264,17 @@ class rotation():
         cons_per_hour_at_v_max = self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "speed_max", "cons_per_hour_at_v_max")
         cons_per_hour_at_v_min = d_rotation[port_name]["cons_per_hour_at_v_min"]
         cons_per_hour_at_v_max = d_rotation[port_name]["cons_per_hour_at_v_max"]
-        total_potential_fuel_gain = (cons_per_hour_at_v_max - cons_per_hour_at_v_min) * time_diff_days.days
 
+        total_potential_fuel_gain = (cons_per_hour_at_v_max - cons_per_hour_at_v_min) * (time_diff_days.total_seconds() / 86400)
         total_potential_fuel_gain_rounded = round(total_potential_fuel_gain, 2)
 
         fuel_cost_per_ton = d_rotation[port_name]["FuelCost"]
-        
-        hourly_cost = total_potential_fuel_gain_rounded / ((time_max - time_min)) * fuel_cost_per_ton
-        hourly_cost_rounded = round(hourly_cost, 2)
+
+        try:
+            hourly_cost = total_potential_fuel_gain_rounded / ((time_max - time_min)) * fuel_cost_per_ton
+            hourly_cost_rounded = round(hourly_cost, 2)
+        except:
+            hourly_cost_rounded = 0
 
         d_rotation[port_name]["HourlyCost"] = hourly_cost_rounded   
         
@@ -268,37 +284,47 @@ class rotation():
         d_rotation = self.__process_df_intermediate_rotation()
         #temp solution until webapp has these 2 values 
         for key, subdict in d_rotation.items():
-                    subdict['nb_cranes_optimal'] = 9
-                    subdict['nb_cranes_proforma'] = 4
+
                     subdict['speed_max'] = 0
                     subdict['speed_min'] = 0 
                     subdict["cons_per_hour_at_v_min"] = 0
                     subdict["cons_per_hour_at_v_max"] = 0 
+
         
         d_rotation = self.__map_d_rotation_to_seq_num_port_name(d_rotation)
+
+        port_nums = [int(folder_name.split('_')[0]) for folder_name in self.l_containers_folder_names]
+        port_names = [self.d_seq_num_to_port_name[num] for num in port_nums]
         
-        for df, port_name in list(zip(self.l_dfs_containers_POL_POD, self.l_ports_names)):
+        for df, port_name in list(zip(self.l_dfs_containers_POL_POD, port_names)):
             
             port_num = self.d_port_name_to_seq_num[port_name]
 
             self.__add_num_moves_to_d_rotation_pol(df, d_rotation, port_name, port_num)
             self.__add_num_moves_to_d_rotation_pod(df, d_rotation, port_name, port_num)
-            
-            if port_num is not None and (port_num != 0 or port_num):
+
+        for port_name in self.l_ports_names:
+    
+            port_num = self.d_port_name_to_seq_num[port_name]
+        
+            if port_num:
+                
                 self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "StdSpeed", "StdFuelCons")
                 
                 self.__add_RW_costs_to_d_rotation(d_rotation, port_name)
                 self.__add_hourly_cost_to_d_rotation(d_rotation, port_name)
         
-         # Add missing keys
+        
+        # Add missing keys
         for port_data in d_rotation.values():
             port_data['EstimContWeight'] = ""
             # port_data['LongName'] = port_data['ShortName']
-            port_data['worldwide'] = '1' if port_data['worldwide'] == "UNRESTRICTED" else '0'
-            
+            port_data['worldwide'] = '0' if port_data['worldwide'] == "UNRESTRICTED" else '1'
+        
         column_order = ['Sequence', 'ShortName', 'NbCranes', 'LongName', 'CostRw20', 'CostRw40', 'CostRw45', 'SpeedSingle', 'SpeedTwin', 'DistToNext',\
-            'StdFuelCons', 'StdSpeed', 'worldwide', 'Gmhold', 'GmDeck', 'StdTimeAtBerth', 'StdTimeAtSea', 'FuelCost', 'Berth Side', 'MaxTierHeight',\
+            'StdFuelCons', 'StdSpeed', 'worldwide', 'Gmhold', 'Gmdeck', 'StdTimeAtBerth', 'StdTimeAtSea', 'FuelCost', 'Berth Side', 'MaxTierHeight',\
             'MaxRowWidth', 'EstimContWeight', 'MaxDraft', 'HourlyCost', 'WindowStartTime', 'WindowEndTime', 'TimeIn', 'TimeOut']    
         # Create the DataFrame with the specified column order
         rotation_final_df = pd.DataFrame.from_dict(d_rotation, orient='index', columns=column_order)
+        
         return rotation_final_df

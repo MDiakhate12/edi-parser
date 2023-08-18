@@ -1,13 +1,14 @@
 import pandas as pd
 import random
 import string
+import json
 from datetime import datetime
 from modules import common_helpers
 
 class AnomalyDetectionLayer():
-    def __init__(self) -> None:
+    def __init__(self, DL:object) -> None:
         self.__edi_file_name_baplie_type_map = {"onboard": "OnBoard.edi", "container": "LoadList.edi", "tank": "Tank.edi"}
-        
+        self._DL = DL
         # data_anomalies: defined as a class attribute so it would not have to be kept passing around
         self.__l_errors = []
         self.__error_num = 0
@@ -54,12 +55,15 @@ class AnomalyDetectionLayer():
             self.__add_single_anomaly(criticity, message, error_value, call_id, file_type, container_id)
 
     
-    def check_if_errors(self) -> None:
+    def check_if_errors(self, error_log_path:str, s3_bucket:str="") -> None:
         error_message = '\n'
         l_errors_len = len(self.__l_errors)
         if l_errors_len and l_errors_len != self.__warnings_count:
             error_message += ('\n').join(str(error) for error in self.__l_errors) + '\n'
-            raise Exception(error_message)
+            lines = [json.dumps(error_dict) for error_dict in self.__l_errors]
+            self._DL.write_csv_lines(lines, error_log_path, s3_bucket)
+            raise Exception(error_message) 
+
         
     # def check_if_errors(self) -> None:
         # l_errors_len = len(self.__l_errors)
@@ -360,8 +364,8 @@ class AnomalyDetectionLayer():
 
                 else:
                     #reactivate Error status
-                    self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
-                    # self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
+                    # self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
+                    self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
 
             else: # LL other than 1st LL
                 if not is_last_char_alpha:
@@ -820,13 +824,13 @@ class AnomalyDetectionLayer():
                 message = f"Port '{port}' not found for territory '{ter}'"
                 self.__add_single_anomaly("Error", message, f"Missing Port: {port} in cranes referential_file", file_type="rotations_intermediate")
     
-    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str)->None:
+    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str,dynamic_out_dir:str,s3_bucket:str )->None:
         for i, port in enumerate(port_codes_sim):
                 if port_codes_ref.count(port) == 0:
                     message = f"Port: {port} in simulation is not found in referential for service_line {service_line}..."
                     error_value = "TBD"
                     self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
-        self.check_if_errors()
+        self.check_if_errors(dynamic_out_dir, s3_bucket)
             
     def no_matching_port_check(self, port:str, index: int):
         
@@ -834,7 +838,7 @@ class AnomalyDetectionLayer():
         error_value = "TBD"
         self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index}")
         
-    def check_out_of_order_ports(self, port_codes_ref:list, ref_port_index_list:list, referential_folder_name:list)->None:
+    def check_out_of_order_ports(self, port_codes_ref:list, ref_port_index_list:list, referential_folder_name:list)-> list:
         filtered_list = [elem for elem in [i for i, port in enumerate(port_codes_ref)] if min(ref_port_index_list) <= elem <= max(ref_port_index_list) and elem in ref_port_index_list]
         # Compare elements at each index and create a set of non-matching elements
         # result_set = {elem1 for elem1, elem2 in zip(ref_port_index_list, filtered_list) if elem1 != elem2}
@@ -842,16 +846,27 @@ class AnomalyDetectionLayer():
         # Convert the list of sets to a set of frozensets to get unique sets
         unique_sets = set(frozenset(s) for s in result_set)
         # self._AL.__add_single_anomaly()
-        
+        mismatching_ports = []
         for mismatch_set in unique_sets:
             elem1, elem2 = mismatch_set
             index1 = ref_port_index_list.index(elem1)
             index2 = ref_port_index_list.index(elem2)
             message = f"Port {referential_folder_name[elem1][-5:]} at call_{index1} and Port {referential_folder_name[elem2][-5:]} at call_{index2} do not have a matching call sequence order between rotation and rotation referential..."
             error_value = "TBD"
-            self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index1} & call_{index2}")
-
+            # reactivate later
+            # self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index1} & call_{index2}")
+            self.__add_single_anomaly("Warning", message, error_value, file_type=f"call_{index1} & call_{index2}")
+            mismatching_ports.append(message)
+        return mismatching_ports
     
+    def check_if_no_output_postprocess(self, files_in_output:str, dynamic_out_dir:str, s3_bucket:str) -> None:
+        if "output.csv" not in files_in_output:
+            criticity = 'ERROR'
+            message = "There are no 'output.csv' result from CPLEX..."
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, file_type='output.csv')
+            self.check_if_errors(dynamic_out_dir, s3_bucket)
+            
     def validate_data(self, data_dict: dict) -> None:
         """
         Validates the data dictionary based on specific criteria.
@@ -880,14 +895,14 @@ class AnomalyDetectionLayer():
                 
                 for key in ['WindowStartTime', 'WindowEndTime']:
                     try:
-                        datetime.strptime(data_entry[key], "%d/%m/%Y %H:%M")
+                        datetime.strptime(data_entry[key], "%Y-%m-%d %H:%M:%S")
                     except:
                         criticity = "Error"
                         message = f"key {key} = '{data_entry[key]}'cannot be converted to Datetime..."
                         error_value = "TBD"
                         self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
                                 
-                if index == 1:    
+                if index == 0:    
                     # Check if 'worldwide' and 'service' are alphabetic
                     for key in ['worldwide', 'service']:
                             if not data_entry[key].isalpha():

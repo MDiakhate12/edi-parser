@@ -7,8 +7,6 @@ runTests: false
 
 provisionFor:
  - master
- - deploy
- - release
  
 ### Additional configuration is possible depending on the project requirements
 

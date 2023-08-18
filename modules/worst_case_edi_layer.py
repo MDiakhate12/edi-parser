@@ -12,10 +12,11 @@ from modules.anomaly_detection_layer import AnomalyDetectionLayer
 
 
 class worst_case_baplies():
-    def __init__(self, logger: logging.Logger, AL: object, vessel_imo : str, simulation_id: str, referential_input_path: str, simulation_input_path: str, s3_bucket_ref: str="", s3_bucket_out:str="") -> None:
+    def __init__(self, logger: logging.Logger, AL: object, vessel_imo : str, simulation_id: str, referential_input_path: str, simulation_input_path: str, simulation_output_path: str, s3_bucket_ref: str="", s3_bucket_out:str="") -> None:
         self.logger = logger
         self.__vessel_imo = vessel_imo
         self.__simulation_id = simulation_id
+        self.__simulation_output_path = simulation_output_path
         self.__referential_input = referential_input_path
         self.__service_line = self.__referential_input.split("/")[-1]
         self.__simulation_input = simulation_input_path
@@ -162,7 +163,7 @@ class worst_case_baplies():
             list: A list of matching reference port indices.
         """
         # do first check to see if all ports exist in referentials
-        self._AL.check_sim_with_referentials(port_codes_sim, port_codes_ref, self.__service_line)
+        self._AL.check_sim_with_referentials(port_codes_sim, port_codes_ref, self.__service_line, self.__simulation_output_path, self.__s3_bucket_out)
         
         sim_port_index_list, ref_port_index_list = [], []
         for i, port in enumerate(port_codes_sim):
@@ -212,15 +213,18 @@ class worst_case_baplies():
                     self.logger.info("will_be_matching to: %s", referential_folder_name[matching_value])
                     self.logger.info("*" * 80)
                 except: 
+                    
                     self._AL.no_matching_port_check(port,i)
-            
+
             elif not len(sublists) and match_tag == True: 
                 self._AL.no_matching_port_check(port,i)
-                
-        self._AL.check_if_errors()
+    
+        self._AL.check_if_errors(self.__simulation_output_path , self.__s3_bucket_out)
         
-        self._AL.check_out_of_order_ports(port_codes_ref, ref_port_index_list, referential_folder_name)
-        self._AL.check_if_errors()
+        mismatching_ports = self._AL.check_out_of_order_ports(port_codes_ref, ref_port_index_list, referential_folder_name)
+        for mismatch in mismatching_ports: 
+            self.logger.warning(mismatch)
+        self._AL.check_if_errors(self.__simulation_output_path , self.__s3_bucket_out)
         
         self.logger.info("ref_port_index_list: %s", ref_port_index_list)
         return ref_port_index_list
@@ -325,105 +329,109 @@ class worst_case_baplies():
                             file = self._DL.read_file(file_path, self.__s3_bucket_ref)
                             l_segments = re.split("(?='LOC\+147)", file)
                             del l_segments[0]
-                            list_end = l_segments[-1].split("'UNT")
-                            l_segments[-1] = list_end[0]
-                            l_segments = [seg[1:] for seg in l_segments]
-                            l_segments = [seg.split("'") for seg in l_segments]
-                            
-                            POD_file, EQD_POD_list, EQD_POD_dict = [], [], {}
-                            for i, segment in enumerate(l_segments):
-                                # detecting empty or full
-                                if segment[1][-1] == '5':
-                                    Empty_flag = False
-                                else: 
-                                    Empty_flag = True
-                                # initial tag for Reefer    
-                                Reefer_flag = False
-                                #initial tag for DGS container
-                                DG_flag = False
-                                #OOG Flag  
-                                OOG_flag = False
+                            if len(l_segments):
+                                list_end = l_segments[-1].split("'UNT")
+                                l_segments[-1] = list_end[0]
+                                l_segments = [seg[1:] for seg in l_segments]
+                                l_segments = [seg.split("'") for seg in l_segments]
                                 
-                                if segment[1] == "LOC+11":
-                                    loc_11_id = segment[2]
-                                    if loc_11_id.startswith("USLA"):
-                                        loc_11_id = "USLAX"
-                                for sub_segment in segment:
-                                    segment_header = sub_segment[:6]
-                                    for value in ['5', '6', '7', '8', '13']:
-                                        if "DIM+"+value in sub_segment:            
-                                            OOG_flag = True
+                                POD_file, EQD_POD_list, EQD_POD_dict = [], [], {}
+                                for i, segment in enumerate(l_segments):
+                                    # detecting empty or full
+                                    if segment[1][-1] == '5':
+                                        Empty_flag = False
+                                    else: 
+                                        Empty_flag = True
+                                    # initial tag for Reefer    
+                                    Reefer_flag = False
+                                    #initial tag for DGS container
+                                    DG_flag = False
+                                    #OOG Flag  
+                                    OOG_flag = False
                                     
-                                    if "TMP" in sub_segment:
-                                        Reefer_flag = True
-                                    
-                                    if "DGS" in sub_segment:
-                                        DG_flag = True
-
-                                    if segment_header == "LOC+11":
-                                        loc_11_id = sub_segment.split("+")[2]
-                                        
+                                    if segment[1] == "LOC+11":
+                                        loc_11_id = segment[2]
                                         if loc_11_id.startswith("USLA"):
                                             loc_11_id = "USLAX"
+                                    for sub_segment in segment:
+                                        segment_header = sub_segment[:6]
+                                        for value in ['5', '6', '7', '8', '13']:
+                                            if "DIM+"+value in sub_segment:            
+                                                OOG_flag = True
+                                        
+                                        if "TMP" in sub_segment:
+                                            Reefer_flag = True
+                                        
+                                        if "DGS" in sub_segment:
+                                            DG_flag = True
 
-                                        if loc_11_id not in POD_file:
-                                            POD_file.append(loc_11_id)
-                                if OOG_flag and not Empty_flag:
-                                    list_name = "EQD_" + loc_11_id + "_OOG"   
-                                elif OOG_flag and Empty_flag:  
-                                    list_name = "EQD_" + loc_11_id + "_EMPTY_OOG"       
-                                elif Reefer_flag and DG_flag and not Empty_flag:
-                                    list_name = "EQD_" + loc_11_id + "_DG_REEFER"
-                                elif Reefer_flag and not DG_flag and Empty_flag:
-                                    list_name = "EQD_" + loc_11_id + "_EMPTY_REEFER"
-                                elif Reefer_flag and not DG_flag and not Empty_flag:
-                                    list_name = "EQD_" + loc_11_id + "_REEFER"
-                                elif DG_flag and  not Empty_flag:
-                                    list_name = "EQD_" + loc_11_id + "_DG"
-                                else:
-                                    if Empty_flag:
-                                        list_name = "EQD_" + loc_11_id + "_EMPTY"
-                                    elif not Empty_flag: 
-                                        list_name = "EQD_" + loc_11_id 
+                                        if segment_header == "LOC+11":
+                                            loc_11_id = sub_segment.split("+")[2]
+                                            
+                                            if loc_11_id.startswith("USLA"):
+                                                loc_11_id = "USLAX"
 
-                                if list_name not in EQD_POD_list:
-                                    EQD_POD_list.append(list_name)
-                                    EQD_POD_dict[list_name] = []
-                                EQD_POD_dict[list_name].append(segment)
-            self.logger.info("EQD Categories: %s", EQD_POD_list)
-            self.logger.info("POD_Portfolio: %s", POD_file)
-            for EQD_POD in EQD_POD_list:
-                POD = EQD_POD[4:9]
-                self.logger.info("POD: %s", POD)
-                POD_index_start = max(missing_port_calls[k], 2)
-                try:
-                    POD_index_end = port_codes_sim.index(POD, POD_index_start + 1) 
-                except ValueError:
-                    POD_index_end = len(port_codes_sim)  
-                if POD_index_start == POD_index_end: 
-                    POD_index_end = len(port_codes_sim) 
-                self.logger.info("POD_index_start: %s", POD_index_start)
-                self.logger.info("POD_index_end: %s", POD_index_end)
-                self.logger.info("POL: %s", port_codes_sim[POD_index_start:POD_index_end])
-                self.logger.info("number of Containers to be divided is = %s", len(EQD_POD_dict[EQD_POD]))
-                result = split_list(EQD_POD_dict[EQD_POD],(POD_index_end - POD_index_start))
-                self.replace_location(result, port_codes_sim[POD_index_start:POD_index_end])
-                for j, folder_name in enumerate(folder_names[POD_index_start:POD_index_end]):
-                    folders = os.path.join(self.__simulation_input, folder_name,"LoadList.edi")
-                    flattened_list = []
-                    for inner_list in result[j]:
-                        for element in inner_list:
-                            flattened_list.append(element)
-                    file = self._DL.read_file(folders, self.__s3_bucket_out)
-                    l_segments = file.split("'")
-                    for index, segment in enumerate(l_segments):
-                        segment_header = segment[:7]
-                        if segment_header == "LOC+147":
-                            EQD_index = index
-                            break
-                    result_list = l_segments[:index] + flattened_list + l_segments[index:]
-                    file = "'".join(result_list)  
-                    self._DL.write_file(file, folders, self.__s3_bucket_out) 
+                                            if loc_11_id not in POD_file:
+                                                POD_file.append(loc_11_id)
+                                    if OOG_flag and not Empty_flag:
+                                        list_name = "EQD_" + loc_11_id + "_OOG"   
+                                    elif OOG_flag and Empty_flag:  
+                                        list_name = "EQD_" + loc_11_id + "_EMPTY_OOG"       
+                                    elif Reefer_flag and DG_flag and not Empty_flag:
+                                        list_name = "EQD_" + loc_11_id + "_DG_REEFER"
+                                    elif Reefer_flag and not DG_flag and Empty_flag:
+                                        list_name = "EQD_" + loc_11_id + "_EMPTY_REEFER"
+                                    elif Reefer_flag and not DG_flag and not Empty_flag:
+                                        list_name = "EQD_" + loc_11_id + "_REEFER"
+                                    elif DG_flag and  not Empty_flag:
+                                        list_name = "EQD_" + loc_11_id + "_DG"
+                                    else:
+                                        if Empty_flag:
+                                            list_name = "EQD_" + loc_11_id + "_EMPTY"
+                                        elif not Empty_flag: 
+                                            list_name = "EQD_" + loc_11_id 
+
+                                    if list_name not in EQD_POD_list:
+                                        EQD_POD_list.append(list_name)
+                                        EQD_POD_dict[list_name] = []
+                                    EQD_POD_dict[list_name].append(segment)
+                            else: 
+                                EQD_POD_list = None
+            if EQD_POD_list:                        
+                self.logger.info("EQD Categories: %s", EQD_POD_list)
+                self.logger.info("POD_Portfolio: %s", POD_file)
+                for EQD_POD in EQD_POD_list:
+                    POD = EQD_POD[4:9]
+                    self.logger.info("POD: %s", POD)
+                    POD_index_start = max(missing_port_calls[k], 2)
+                    try:
+                        POD_index_end = port_codes_sim.index(POD, POD_index_start + 1) 
+                    except ValueError:
+                        POD_index_end = len(port_codes_sim)  
+                    if POD_index_start == POD_index_end: 
+                        POD_index_end = len(port_codes_sim) 
+                    self.logger.info("POD_index_start: %s", POD_index_start)
+                    self.logger.info("POD_index_end: %s", POD_index_end)
+                    self.logger.info("POL: %s", port_codes_sim[POD_index_start:POD_index_end])
+                    self.logger.info("number of Containers to be divided is = %s", len(EQD_POD_dict[EQD_POD]))
+                    result = split_list(EQD_POD_dict[EQD_POD],(POD_index_end - POD_index_start))
+                    self.replace_location(result, port_codes_sim[POD_index_start:POD_index_end])
+                    for j, folder_name in enumerate(folder_names[POD_index_start:POD_index_end]):
+                        folders = os.path.join(self.__simulation_input, folder_name,"LoadList.edi")
+                        flattened_list = []
+                        for inner_list in result[j]:
+                            for element in inner_list:
+                                flattened_list.append(element)
+                        file = self._DL.read_file(folders, self.__s3_bucket_out)
+                        l_segments = file.split("'")
+                        for index, segment in enumerate(l_segments):
+                            segment_header = segment[:7]
+                            if segment_header == "LOC+147":
+                                EQD_index = index
+                                break
+                        result_list = l_segments[:index] + flattened_list + l_segments[index:]
+                        file = "'".join(result_list)  
+                        self._DL.write_file(file, folders, self.__s3_bucket_out) 
 
     def generate_worst_case_baplie_loadlist(self):
         """

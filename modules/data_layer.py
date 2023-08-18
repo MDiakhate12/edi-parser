@@ -316,6 +316,7 @@ class DataLayer():
             #TODO add an else statement to check if any headers from the body exists and throw an error?
         
         if first_segment_in_body_idx != -1:
+            
             return segments_list[first_segment_in_body_idx:]
 
         else:
