@@ -219,11 +219,15 @@ class MainLayer():
         onboard_call = ""
         self.logger.info(self.__dynamic_in_dir)
         after_first_call_loadlist = 0
-        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+        folder_lists = sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))
+
+        self.__AL.check_folder_if_exists(folder_lists, keyword="call_00", print_message= "-> no OnBoard.edi file uploaded...")
+        
+        for i, folder_name in enumerate(folder_lists): 
             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
             folder_name_split = folder_name.split("_")
-            call_id = "_".join(folder_name_split[-2:])
             
+            call_id = "_".join(folder_name_split[-2:])
             seq_num = int(folder_name_split[-2])
             loadlist_flag, tank_flag  = 0, 0
             
@@ -231,7 +235,7 @@ class MainLayer():
                 if file_name.split(".")[-1] == "edi":
                     self.__l_baplies_filepaths.append(f"{baplies_dir}/{file_name}")
 
-                    if file_name == "OnBoard.edi":
+                    if file_name == "OnBoard.edi" and seq_num != 0:
                         onboard_call = folder_name
 
                         self.__get_first_two_ports_baplie_and_csv_paths(baplies_dir, file_name, folder_name)
@@ -258,7 +262,9 @@ class MainLayer():
                 
             # error in case of wrong edi files
             # first folder with no OnBoard.edi
-            if not i:
+            
+            if not seq_num:
+                
                 self.__AL.check_onboard_edi(onboard_call, call_id)
             
             # not first folder but LoadList.edi without Tank.edi or Tank.edi without LoadList.edi

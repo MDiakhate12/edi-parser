@@ -29,6 +29,7 @@ def log_error(e: Exception, err_msg: str, simu_id:str, s3_bucket:str="") -> None
     logger.error(err_msg)
     logger.error(e, exc_info=True)
     log_content = f"{err_msg}\n{str(e)}"
+    print(log_content)
     log_to_s3(simu_id, s3_bucket, log_content) 
 
 def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynamoDB: str, target_key : str="", status : str="PENDING") -> None:
@@ -112,6 +113,6 @@ def main():
     except Exception as e:
         logger.error(f"There was an error while pre-processing the data...")
         logger.error(e, exc_info=True)
-
+        print
 if __name__ == "__main__":
     main()
