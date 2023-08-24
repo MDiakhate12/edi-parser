@@ -10,8 +10,6 @@ sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.main_layer import MainLayer
 from modules.data_layer import DataLayer as DL
 
-# logger = logging.getLogger(__name__)
-# logger.setLevel(logging.INFO)
 class CustomAdapter(logging.LoggerAdapter):
     """
     This example adapter expects the passed in dict-like object to have a
@@ -19,11 +17,19 @@ class CustomAdapter(logging.LoggerAdapter):
     """
     def process(self, msg, kwargs):
         return '[%s] %s' % (self.extra['simu_id'], msg), kwargs
-
-def log_error(e: Exception, err_msg: str) -> None:
+    
+def log_to_s3(simu_id:str, bucket_name:str, log_content:str):
+    s3_client = client('s3')
+    try:
+        s3_client.put_object(Bucket=bucket_name, Key=f'{simu_id}/out/error.txt', Body=log_content)
+    except NoCredentialsError:
+        print("No AWS credentials found. Cannot upload log to S3.")
+        
+def log_error(e: Exception, err_msg: str, simu_id:str, s3_bucket:str="") -> None:
     logger.error(err_msg)
     logger.error(e, exc_info=True)
-    
+    log_content = f"{err_msg}\n{str(e)}"
+    log_to_s3(simu_id, s3_bucket, log_content) 
 
 def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynamoDB: str, target_key : str="", status : str="PENDING") -> None:
         dynamodb = client('dynamodb')
@@ -37,15 +43,16 @@ def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynam
    
 def lambda_handler(event, context):
     global logger
-
     logger_config = logging.getLogger(__name__)
     logger_config.setLevel(logging.INFO)
     logger = CustomAdapter(logger_config, {'simu_id': event["simulation_id"]})
+    
     global s3_resource, dynamodb 
     s3_resource = resource('s3')
     dynamodb = resource('dynamodb')
     table_dynamoDB = os.environ['DynamoDB_TABLE_NAME']
     bucket_data_name = bucket_output_name = os.environ['S3_BUCKET_NAME']
+    
     try:
         bucket_ref_name = os.environ['s3_ref_bucket']
     except:
@@ -72,13 +79,14 @@ def lambda_handler(event, context):
     except Exception as e:
         simulation_id = event["simulation_id"]
         if reusePreviousResults == False:
-            write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.csv", status = 'PRE-KO')
+            write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.txt", status = 'PRE-KO')
             err_msg = "There was an error while running the lambda handler for Pre_Processing..."
-            log_error(e, err_msg)
+            log_error(e, err_msg, simulation_id, bucket_data_name)
         else:
-            write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.csv", status = 'POST-KO')
+            write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.txt", status = 'POST-KO')
             err_msg = f"There was an error while running the lambda handler for Post-Processing..."
-            log_error(e, err_msg)
+            log_error(e, err_msg, simulation_id, bucket_data_name)
+            
 
         status_code = 400
 

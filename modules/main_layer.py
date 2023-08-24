@@ -10,9 +10,9 @@ import logging
 # Set up the root logger with the desired log level and format
 
 
-# Disable the default stream handler of the root logger
-root_logger = logging.getLogger()
-root_logger.handlers = []
+# # Disable the default stream handler of the root logger
+# root_logger = logging.getLogger()
+# root_logger.handlers = []
 
 # # Create a file handler with 'w' filemode to truncate the file
 # file_handler = logging.FileHandler('log_file.log', mode='w')
@@ -26,16 +26,16 @@ root_logger.handlers = []
 # root_logger.addHandler(file_handler)
 
 # # Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# console_handler = logging.StreamHandler()
+# console_handler.setLevel(logging.DEBUG)
+# # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # # Set the formatter for the console handler
-console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(console_formatter)
+# # # # Set the formatter for the console handler
+# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# console_handler.setFormatter(console_formatter)
 
-# # # # Add the console handler to the root logger
-root_logger.addHandler(console_handler)
+# # # # # Add the console handler to the root logger
+# root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
@@ -46,7 +46,7 @@ from modules.lashing_calculation_layer import Lashing
 from modules.vessel import Vessel
 from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
-#from modules.dg_layer import DG
+# from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
 class MainLayer():
@@ -148,7 +148,7 @@ class MainLayer():
         self.__rotation_intermediate_path = f"{self.__dynamic_in_dir}/rotation.csv"
         
         self.__cplex_out_dir = f"{simulation_dir}/out"
-        self.__error_log_path = f"{self.__cplex_out_dir}/error.csv"
+        self.__error_log_path = f"{self.__cplex_out_dir}/error.txt"
        
     def __get_first_two_ports_baplie_and_csv_paths(self, baplies_dir: str, file_name: str, folder_name: str) -> None:
         """
@@ -2169,6 +2169,7 @@ class MainLayer():
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")
         self.logger.info("*"*80)
+
         
     def __get_CPLEX_output(self) -> 'tuple[pd.DataFrame, dict, dict]':
         df_cplex_out = self.__DL.read_csv(f"{self.__cplex_out_dir}/output.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
@@ -2390,7 +2391,7 @@ class MainLayer():
                 tail_segments_list[i] = "+".join(segment_split)
 
         l_all_semgents = header_segments_list + containers_data_list + tail_segments_list
-        path_to_save = f"{self.__cplex_out_dir}/BayPlan.edi"
+        path_to_save = f"{self.__cplex_out_dir}/Bayplan.edi"
         self.__DL.output_bayplan_edi(path_to_save, baplie_delimiter, l_all_semgents, self.__s3_bucket_out)
         
 

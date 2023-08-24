@@ -897,8 +897,8 @@ class AnomalyDetectionLayer():
                     try:
                         datetime.strptime(data_entry[key], "%Y-%m-%d %H:%M:%S")
                     except:
-                        criticity = "Error"
-                        message = f"key {key} = '{data_entry[key]}'cannot be converted to Datetime..."
+                        criticity = "Warning"
+                        message = f"key {key} = '{data_entry[key]}'cannot be converted to Datetime... of format YYYY-MM-DD HH:MM:SS"
                         error_value = "TBD"
                         self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
                                 

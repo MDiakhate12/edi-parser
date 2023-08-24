@@ -6,9 +6,9 @@
   <satisfiesReleaseNotes>false</satisfiesReleaseNotes>
   <satisfiesPerformanceTested>false</satisfiesPerformanceTested>
   <deployables>
-    <aws.AwsLambdaPackageFile name="lambda-preprocessing-dev" file="dist/Pre-processing-CICD-1.zip">
+    <aws.AwsLambdaPackageFile name="optistow-lambda-preprocessing-dev" file="dist/Pre-processing-CICD-1.zip">
       <tags>
-        <value>lambda-preprocessing-dev</value>
+        <value>optistow-lambda-preprocessing-dev</value>
       </tags>
       <scanPlaceholders>true</scanPlaceholders>
       <preScannedPlaceholders>false</preScannedPlaceholders>
