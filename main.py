@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import datetime 
+import traceback
 
 sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.main_layer import MainLayer
@@ -21,15 +22,32 @@ class CustomAdapter(logging.LoggerAdapter):
 def log_to_s3(simu_id:str, bucket_name:str, log_content:str):
     s3_client = client('s3')
     try:
+        
         s3_client.put_object(Bucket=bucket_name, Key=f'{simu_id}/out/error.txt', Body=log_content)
+        
     except NoCredentialsError:
         print("No AWS credentials found. Cannot upload log to S3.")
         
-def log_error(e: Exception, err_msg: str, simu_id:str, s3_bucket:str="") -> None:
+def log_error(e: Exception, err_msg: str, simu_id:str, event:dict, s3_bucket:str="") -> None:
     logger.error(err_msg)
     logger.error(e, exc_info=True)
-    log_content = f"{err_msg}\n{str(e)}"
-    print(log_content)
+
+    error_message = str(e)
+    if "errorNo" not in error_message:
+        context_details = {
+            'event': event,  # Print the Lambda event for more context
+            'traceback': traceback.format_exc()  # Capture the traceback for detailed error info
+            
+        }
+        context_details['traceback'].replace(r'\n', '\n')
+    else: 
+        context_details = {
+            'event': event,  # Print the Lambda event for more context
+            'traceback': ""  # Capture the traceback for detailed error info
+            
+        }
+        
+    log_content = f"{err_msg} \n{str(e)} \n\n Lambda trigger event: {context_details['event']} \n\n{context_details['traceback']}"
     log_to_s3(simu_id, s3_bucket, log_content) 
 
 def write_records_dynamoDB(bucket_data_name: str, SimulationId: str, table_dynamoDB: str, target_key : str="", status : str="PENDING") -> None:
@@ -82,11 +100,11 @@ def lambda_handler(event, context):
         if reusePreviousResults == False:
             write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.txt", status = 'PRE-KO')
             err_msg = "There was an error while running the lambda handler for Pre_Processing..."
-            log_error(e, err_msg, simulation_id, bucket_data_name)
+            log_error(e, err_msg, simulation_id, event, bucket_data_name)
         else:
             write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key = "error.txt", status = 'POST-KO')
             err_msg = f"There was an error while running the lambda handler for Post-Processing..."
-            log_error(e, err_msg, simulation_id, bucket_data_name)
+            log_error(e, err_msg, simulation_id, event, bucket_data_name)
             
 
         status_code = 400
@@ -113,6 +131,6 @@ def main():
     except Exception as e:
         logger.error(f"There was an error while pre-processing the data...")
         logger.error(e, exc_info=True)
-        print
+        
 if __name__ == "__main__":
     main()
