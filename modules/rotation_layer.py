@@ -271,7 +271,7 @@ class rotation():
         fuel_cost_per_ton = d_rotation[port_name]["FuelCost"]
 
         try:
-            hourly_cost = total_potential_fuel_gain_rounded / ((time_max - time_min)) * fuel_cost_per_ton
+            hourly_cost = (total_potential_fuel_gain_rounded / ((time_max - time_min)) * fuel_cost_per_ton) if time_min != time_max else 0
             hourly_cost_rounded = round(hourly_cost, 2)
         except:
             hourly_cost_rounded = 0

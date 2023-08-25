@@ -223,7 +223,8 @@ class MainLayer():
 
         self.__AL.check_folder_if_exists(folder_lists, keyword="call_00", print_message= "-> no OnBoard.edi file uploaded...")
         
-        for i, folder_name in enumerate(folder_lists): 
+        for i, folder_name in enumerate(folder_lists):
+            
             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
             folder_name_split = folder_name.split("_")
             
@@ -235,7 +236,7 @@ class MainLayer():
                 if file_name.split(".")[-1] == "edi":
                     self.__l_baplies_filepaths.append(f"{baplies_dir}/{file_name}")
 
-                    if file_name == "OnBoard.edi" and seq_num != 0:
+                    if file_name == "OnBoard.edi":
                         onboard_call = folder_name
 
                         self.__get_first_two_ports_baplie_and_csv_paths(baplies_dir, file_name, folder_name)
@@ -247,6 +248,8 @@ class MainLayer():
                         elif file_name == "LoadList.edi": 
                             loadlist_flag = 1
                             after_first_call_loadlist += 1
+                        else: 
+                            loadlist_flag = 1
                             
                     elif file_name == "Tank.edi" :
                         tank_flag = 1
@@ -314,7 +317,7 @@ class MainLayer():
         self.__AL.check_flying_containers(d_container_info_by_bay_row_tier, d_stacks_rows_by_bay_row_deck, d_type_to_size_map)
         self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
         
-        onboard_csv_name = f"{self.__vessel_id} Containers OnBoard Loadlist 0.csv"
+        onboard_csv_name = "Containers OnBoard Loadlist 0.csv"
         onboard_csv_path = f"{self.__py_scripts_out_dir}/{onboard_csv_name}"
         self.__DL.write_csv(df_onboard_loadlist, onboard_csv_path, self.__s3_bucket_out)
 
@@ -574,7 +577,7 @@ class MainLayer():
                            "SetPoint","Stowage and segregation","Package Goods","Stowage Category","not permitted bay 74",
                            "Zone"]]
                 
-        DG_csv_name =  f"{self.__vessel_id} DG Loadlist.csv"
+        DG_csv_name =  "DG Loadlist.csv"
         DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
         self.__DL.write_csv(df_DG_loadlist, DG_csv_path, self.__s3_bucket_out)
         
@@ -801,7 +804,7 @@ class MainLayer():
         self.__AL.check_reefer_containers_at_non_reefer_slots(l_reefers_at_non_reefer)
         self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
 
-        stowing_info_csv_name = f"{self.__vessel_id} Containers Stowing Info 0.csv"
+        stowing_info_csv_name = "Containers Stowing Info 0.csv"
         stowing_info_csv_path = f"{self.__py_scripts_out_dir}/{stowing_info_csv_name}"
         self.__DL.write_csv_lines(l_stowing_info_lines, stowing_info_csv_path, self.__s3_bucket_out)
         
@@ -815,7 +818,7 @@ class MainLayer():
                 True
             )
         
-        overstowing_subbays_csv_name = f"{self.__vessel_id} Overstowing Subbays 0.csv"
+        overstowing_subbays_csv_name = "Overstowing Subbays 0.csv"
         overstowing_subbays_csv_path = f"{self.__py_scripts_out_dir}/{overstowing_subbays_csv_name}"
         self.__DL.write_csv_lines(l_overstowing_subbays_lines, overstowing_subbays_csv_path, self.__s3_bucket_out)
 
@@ -839,11 +842,11 @@ class MainLayer():
                 l_POL_POD_revenues_lines
             )
 
-        groups_completed_csv_name = f"{self.__vessel_id} Container Groups Completed 0.csv"
+        groups_completed_csv_name = "Container Groups Completed 0.csv"
         groups_completed_csv_path = f"{self.__py_scripts_out_dir}/{groups_completed_csv_name}"
         self.__DL.write_csv_lines(l_container_groups_completed_lines, groups_completed_csv_path, self.__s3_bucket_out)
         
-        groups_containers_csv_name = f"{self.__vessel_id} Container Groups Containers.csv"
+        groups_containers_csv_name = "Container Groups Containers.csv"
         groups_containers_csv_path = f"{self.__py_scripts_out_dir}/{groups_containers_csv_name}"
         self.__DL.write_csv_lines(l_container_groups_containers_lines, groups_containers_csv_path, self.__s3_bucket_out)
 
@@ -1452,7 +1455,7 @@ class MainLayer():
 
             f_loadlist_exclusions = pd.DataFrame(f_loadlist_exclusions_list, columns= header_list)
 
-            DG_csv_name =  f"{self.__vessel_id} DG Loadlist Exclusions.csv"
+            DG_csv_name =  "DG Loadlist Exclusions.csv"
             DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
             self.__DL.write_csv(f_loadlist_exclusions, DG_csv_path, self.__s3_bucket_out)
 
@@ -1470,7 +1473,7 @@ class MainLayer():
 
         #======================================================================================================================================
             
-            groups_containers_csv_name = f"{self.__vessel_id} Container Groups Containers.csv"
+            groups_containers_csv_name = "Container Groups Containers.csv"
             groups_containers_csv_path = f"{self.__py_scripts_out_dir}/{groups_containers_csv_name}"
             f_containers = self.__DL.read_csv(groups_containers_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_out).astype(str)
 
@@ -1598,11 +1601,11 @@ class MainLayer():
             f_cg_exclusion_zones = pd.DataFrame(l_cg_exclusion_zones, columns=s_header_zones_list)
             f_cg_exclusion_zones_nb_dg = pd.DataFrame(l_cg_exclusion_zones_nb_dg, columns=s_header_nb_dg_list)
 
-            f_cg_exclusion_zones_name =  f"{self.__vessel_id} DG Container Groups Exclusion Zones.csv"
+            f_cg_exclusion_zones_name =  "DG Container Groups Exclusion Zones.csv"
             f_cg_exclusion_zones_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_name}"
             self.__DL.write_csv(f_cg_exclusion_zones, f_cg_exclusion_zones_csv_path, self.__s3_bucket_out)
 
-            f_cg_exclusion_zones_nb_dg_name =  f"{self.__vessel_id} DG Container Groups Exclusion Zones Nb DG.csv"
+            f_cg_exclusion_zones_nb_dg_name =  "DG Container Groups Exclusion Zones Nb DG.csv"
             f_cg_exclusion_zones_nb_dg_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_nb_dg_name}"
             self.__DL.write_csv(f_cg_exclusion_zones_nb_dg, f_cg_exclusion_zones_nb_dg_csv_path, self.__s3_bucket_out)
 
@@ -1903,7 +1906,7 @@ class MainLayer():
                 l_filled_subtanks_csv_cols
             )
         
-        filled_tanks_csv_name  = f"{self.__vessel_id} Preprocessed Filled Tanks Ports.csv"
+        filled_tanks_csv_name  = "Preprocessed Filled Tanks Ports.csv"
         filled_tanks_csv_path  = f"{self.__py_scripts_out_dir}/{filled_tanks_csv_name}"
         self.__DL.write_csv(df_filled_subtanks, filled_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
