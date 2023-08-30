@@ -1,5 +1,6 @@
 import pandas as pd
-
+import numpy as np
+import re as re
 from modules import common_helpers
 
 class PreProcessingLayer():
@@ -2037,7 +2038,9 @@ class PreProcessingLayer():
 
     def __get_container_revenue(self, d_pol_pod_revenues, pol_name, pod_name, size, c_type, height, empty):    
         # if no predefined revenue, return 0.0
+        
         if (pol_name, pod_name) not in d_pol_pod_revenues:
+            
             #TODO uncomment print
             # print("POL %s POD %s NOT IN REVENUES" % (pol_name, pod_name))
             return 0.0
@@ -2103,7 +2106,7 @@ class PreProcessingLayer():
                         (container, pol_name, pod_name,\
                         size, c_type, c_weight, height, c_dg, empty, revenue)
                 l_container_groups_containers_lines.append(s_line)
-
+        
         return l_container_groups_containers_lines
 
     def get_two_list_for_container_groups(
@@ -2147,3 +2150,436 @@ class PreProcessingLayer():
         This function is just defined to be able to toggle (open/close) the region GROUP CONTAINERS
         """
         pass
+    # start of Final container.csv file
+    def __add_weights(self, df_containers:pd.DataFrame) -> pd.DataFrame:
+        # We use the VGM value by default
+        # if it is undefined, empty or zero, we use the AET value
+        df_containers["Weight"] = df_containers["Weight_VGM"]
+        df_containers["Weight"] = np.where(df_containers["Weight"].isnull(), df_containers["Weight_AET"], df_containers["Weight"])
+        df_containers["Weight"] = np.where(df_containers["Weight"] == "", df_containers["Weight_AET"], df_containers["Weight"])
+        df_containers["Weight"] = np.where(df_containers["Weight"].astype(int) == 0, df_containers["Weight_AET"], df_containers["Weight"])
+        # In case we were to use AET value and it was also empty ("").
+        # We also need to convert these values to float and convert them to metric tons
+        df_containers["Weight"] = df_containers["Weight"].replace("", "0").astype(float) / 1000
+        
+        df_containers["cWeight"] = np.where(df_containers["Weight"] <= 15, "L", "H")
+        df_containers.drop(columns=["Weight_VGM", "Weight_AET"], inplace=True)
+
+        return df_containers
+    
+        
+    def __extract_columns_combined_containers(self, df_all_containers:pd.DataFrame, containers_final_dict:dict) -> pd.DataFrame:
+        
+        static_columns = [
+            "EQD_ID", "LOC_9_LOCATION_ID", "LOC_11_LOCATION_ID", # ID, POL, POD
+            "EQD_MEA_VGM_MEASURE", "EQD_MEA_AET_MEASURE", # Weights
+            "EQD_SIZE_AND_TYPE_DESCRIPTION_CODE", # Size, Heigh and Type
+            "EQD_FULL_OR_EMPTY_INDICATOR_CODE", # Empty
+            "TMP_TEMPERATURE_DEGREE", # Reefer
+            "LOC_147_ID"
+        ]
+        
+        oog_dynamic_cols = [
+            "EQD_DIM_5_LENGTH_MEASURE", "EQD_DIM_6_LENGTH_MEASURE", 
+            "EQD_DIM_7_WIDTH_MEASURE", "EQD_DIM_8_WIDTH_MEASURE", "EQD_DIM_13_HEIGHT_MEASURE"
+        ]
+        
+        
+        oog_dynamic_cols_present = [col for col in oog_dynamic_cols if col in df_all_containers.columns]
+        
+        handling_cols = [col for col in df_all_containers.columns if "HANDLING" in col or "HAN" in col]
+        
+        columns_selected = static_columns + oog_dynamic_cols_present + handling_cols
+        
+        df_combined_containers_filtered = df_all_containers[columns_selected]
+        df_combined_containers_filtered = df_combined_containers_filtered.copy()
+        df_combined_containers_filtered.rename(columns= containers_final_dict["column_names"], inplace=True)
+        
+        
+        return df_combined_containers_filtered
+    
+    def __add_oog_combined_containers(self, df_combined_containers: pd.DataFrame) -> pd.DataFrame:
+        # Handle OOG_TOP_MEASURE
+        if "OOG_TOP" in df_combined_containers.columns:
+            df_combined_containers["OOG_TOP"].replace('', np.nan, inplace=True)
+            df_combined_containers["OOG_TOP"] = pd.to_numeric(df_combined_containers["OOG_TOP"], errors='coerce')
+            df_combined_containers["OOG_TOP_MEASURE"] = np.where(
+                df_combined_containers["OOG_TOP"].isnull(), 
+                0.0, 
+                df_combined_containers["OOG_TOP"] / 100
+            ).astype(float)
+        else:
+            df_combined_containers["OOG_TOP_MEASURE"] = 0.0
+
+        # Handle OOG columns and convert them to integer
+        oog_cols = ["OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_LEFT", "OOG_TOP"]
+        for col in oog_cols:
+            # Now perform the integer conversion and comparison
+            if col in df_combined_containers.columns:
+                # Replace empty strings with np.nan
+                df_combined_containers[col].replace('', np.nan, inplace=True)
+
+                # Convert NaNs to 0 before conversion to integers
+                df_combined_containers[col].fillna(0, inplace=True)
+                
+                df_combined_containers[col] = (df_combined_containers[col].astype(int) > 0).astype(int)
+            else:
+                df_combined_containers[col] = 0
+                
+        return df_combined_containers
+    
+    def __add_stowage_handling(self, df_containers: pd.DataFrame) -> pd.DataFrame:
+        
+        handling_cols = [col for col in df_containers.columns if "HANDLING" in col or "HAN" in col]
+
+        def get_stowage_handling(row):
+            for cell in row[handling_cols]:
+                scell = str(cell)
+                if "OND" in scell or "DECK" in scell:
+                    return "DECK"
+                if "UND" in scell or "HOLD" in scell:
+                    return "HOLD"
+            return ""
+
+        df_containers["Stowage"] = df_containers.apply(get_stowage_handling, axis=1)
+
+        return df_containers   
+    
+    def __add_slot_position(self, df_containers:pd.DataFrame) -> pd.DataFrame:
+        df_containers["Slot"].replace('', np.nan, inplace=True)
+        df_containers["Slot"] = np.where(df_containers["Slot"].isnull(), 0, df_containers["Slot"]).astype(int)
+        df_containers["Slot"] = df_containers["Slot"].replace(0, "").astype(str)
+
+        return df_containers
+
+    def __add_uslax_priorities(self, df:pd.DataFrame, df_uslax:pd.DataFrame)-> pd.DataFrame:
+        
+        df = pd.merge(df, df_uslax, how='left',
+                    left_on = ["DischPort"], right_on = ["subPort"])
+        df["Subport"] = np.where(df["port"].isnull(), "", df["DischPort"])
+        df["port"] = np.where(df["port"].isnull(), df["DischPort"], df["port"])
+        df.rename(columns={"DischPort": "OriginalPOD", "port": "DischPort"}, inplace=True)
+        df["priorityID"] = np.where(df["priorityID"] == "", -1, df["priorityID"])
+        df["priorityID"] = df["priorityID"].fillna(-1).astype(int)
+        df["priorityLevel"] = np.where(df["priorityLevel"]=="", -1, df["priorityLevel"])
+        df["priorityLevel"] = df["priorityLevel"].fillna(-1).astype(int)
+        
+        return df
+    
+    def __add_characteristics(self, df:pd.DataFrame)->pd.DataFrame:
+        # A container is empty if its "full or empty" indicator equals 4, else it should equal to 5.
+        df["Empty"] = np.where(df["FULL_OR_EMPTY"].astype(str) == "4", "E", "")
+        df.drop(columns=["FULL_OR_EMPTY"], inplace=True)
+        
+        # A container is refeer if a temperature is set.
+        # However if the container is empty we ignore the temperature.
+        df["cType"] = np.where(df["TEMPERATURE"]=="", "GP", "RE")
+        #df["cType"] = np.where(df["TEMPERATURE"].astype(str) != "", "RE", "GP")
+        df["cType"] = np.where(df["Empty"] == "E", "GP", df["cType"])
+        df.drop(columns=["TEMPERATURE"], inplace=True)
+        
+        df["Setting"] = np.where(df["cType"] == "RE", "R", df["Empty"])
+
+        return df
+    
+    def __add_revenues(self, df:pd.DataFrame, df_revenues:pd.DataFrame)-> pd.DataFrame:
+        # Get revenue from an external file.
+        # The revenue depends on the (POL,POD,Size,Height,Reefer) combination
+        expanded = []
+        cols = ["POL", "POD", "Size_fictive", "Height_fictive", "cType", "Revenue"]
+        for (i, row) in df_revenues.iterrows():
+            pol = row["POL"]
+            pod = row["POD"]
+            revenue = row["Revenue"]
+
+            if "Reefer" in row["Size-Type"]:
+                expanded.append(pd.DataFrame([[pol, pod, "20", "", "RE", revenue]], columns=cols))
+                expanded.append(pd.DataFrame([[pol, pod, "40", "", "RE", revenue]], columns=cols))
+                expanded.append(pd.DataFrame([[pol, pod, "40", "HC", "RE", revenue]], columns=cols))
+            else:
+                height = "HC" if "HC" in row["Size-Type"] else ""
+                size = "20" if "20" in row["Size-Type"] else "40"
+                expanded.append(pd.DataFrame([[pol, pod, size, height, "GP", revenue]], columns=cols))
+
+        expanded_revenues = pd.concat(expanded, ignore_index=True)
+        
+        # In order to get the correct revenues, because of port codes followed by a number to differentiate rotations
+        df['POL'] = [ row[:5] for row in df['LoadPort'] ]
+        df['POD'] = [ row[:5] for row in df['DischPort'] ]
+        
+        # Regarding the revenues we do not differentiate 45' containers from 40'
+        df['Size_fictive'] = np.where(df["Size"] == "20", "20", "40")
+        
+        df['Height_fictive'] = np.where(df["Size"] == "20", "", df["Height"])      
+
+        df = pd.merge(df, expanded_revenues, how='left',
+                    left_on=['POL', 'POD', 'Size_fictive', 'Height_fictive', 'cType'],
+                    right_on=['POL', 'POD', 'Size_fictive', 'Height_fictive', 'cType'])
+        
+        df.drop(columns=["POL", "POD", "Size_fictive", "Height_fictive"], inplace=True)
+        
+        # And finally we keep reefer price for reefer containers, and GP price for the others
+        #df["Revenue"] = np.where(df["Revenue_y"].isnull(), df["Revenue_x"], df["Revenue_y"])
+        #df.drop(columns=["Revenue_x", "Revenue_y"], inplace=True)
+        
+        # Unavailable revenues are set to 0
+        df["Revenue"] = np.where(df["Revenue"].isnull(), 0, df["Revenue"])
+
+        return df
+
+    def __add_pol_pod_nb(self, df:pd.DataFrame, df_rotation: pd.DataFrame) -> pd.DataFrame:
+        
+        df_rotation = df_rotation[["ShortName", "Sequence"]]
+
+        df["POLOrig"] = [ port if port in df_rotation["ShortName"] else port[:5] for port in df["LoadPort"] ]
+        df["PODOrig"] = [ port if port in df_rotation["ShortName"] else port[:5] for port in df["DischPort"] ]
+
+        df = pd.merge(df, df_rotation, how='left',
+                    left_on=["POLOrig"], right_on=["ShortName"])
+        df.rename(columns={"Sequence": "POL_nb"}, inplace=True)
+        df.drop(columns=["ShortName"], inplace=True)
+
+        df = pd.merge(df, df_rotation, how='left',
+                    left_on=["PODOrig"], right_on=["ShortName"])
+        df.rename(columns={"Sequence": "POD_nb"}, inplace=True)
+        df.drop(columns=["ShortName"], inplace=True)
+
+        nbPorts = len(set(df_rotation["ShortName"]))
+
+        df["POL_nb"] = np.where(common_helpers.is_empty(df["POL_nb"]) & ~common_helpers.is_empty(df["Slot"]), -nbPorts, df["POL_nb"])
+        df["POL_nb"] = np.where(common_helpers.is_empty(df["POL_nb"]) & common_helpers.is_empty(df["Slot"]), 2*nbPorts, df["POL_nb"])
+        df["POD_nb"] = np.where(common_helpers.is_empty(df["POD_nb"]), 2*nbPorts, df["POD_nb"])
+
+        df["POL_nb"] = np.where(common_helpers.is_empty(df["Slot"]), df["POL_nb"], df["POL_nb"] - nbPorts).astype(int)
+        df["POD_nb"] = np.where(df["POL_nb"] > df["POD_nb"], df["POL_nb"] + nbPorts, df["POD_nb"]).astype(int)
+
+        return df
+    
+    
+    def __add_slot_stack_informations(self, df: pd.DataFrame, df_stacks: pd.DataFrame)-> pd.DataFrame:
+        
+        df_stacks["MacroRow"] = [ int(str(sb)[-2:-1]) for sb in df_stacks["SubBay"] ]
+        df_stacks = df_stacks[["Bay", "Row", "Tier", "MacroRow", "OddSlot", "FirstTier"]].rename(columns={"Tier": "MacroTier"})
+        df_stacks[["Bay", "Row", "MacroTier"]] = df_stacks[["Bay", "Row", "MacroTier"]].astype(int)
+        df["Tier"] = [ int(row[-2:]) for row in df["Slot"] ]
+        df["Row"] = [ int(row[-4:-2]) for row in df["Slot"] ]
+        df["Bay"] = [ int(row[:-4]) for row in df["Slot"] ]
+        df["MacroBay"] = [ 2+round((row-2)/4)*4 for row in df["Bay"] ]
+        df["MacroTier"] = df["Tier"] >= 50
+
+        df = pd.merge(df, df_stacks, how='left', left_on=["Bay", "Row", "MacroTier"], right_on=["Bay", "Row", "MacroTier"])
+
+        return df
+
+    def __get_on_board_df(self, df: pd.DataFrame, df_stacks, first_port: int)-> pd.DataFrame:
+        df_ob = df[~common_helpers.is_empty(df["Slot"])].copy()
+        df_ob = df_ob[df_ob["POD_nb"] >= first_port]
+        df_ob = self.__add_slot_stack_informations(df_ob, df_stacks)
+
+        return df_ob
+    
+    def __add_overstows(self, df: pd.DataFrame, df_stacks: pd.DataFrame)-> pd.DataFrame:
+        df_ob = self.__get_on_board_df(df, df_stacks, 0)
+
+        overstow = {}
+        for container in df_ob["Container"]:
+            overstow[container] = np.inf
+
+        # Stack restows
+        for (name, gr_df_ob) in df_ob.groupby(["MacroBay", "Row", "MacroTier"]):
+            for (i1, r1) in gr_df_ob.iterrows():
+                for (i2, r2) in gr_df_ob.iterrows():
+                    if r2["POL_nb"] < r1["POD_nb"] and r1["POD_nb"] < r2["POD_nb"]:
+                        if r1["Tier"] < r2["Tier"] and abs(r1["Bay"] - r2["Bay"]) <= 1: #(r1["Bay"] == r2["Bay"] or (r1["Size"] == 20 and r2["Size"] != 20)):
+                            overstow[r2["Container"]] = min(overstow[r2["Container"]], r1["POD_nb"])
+                                
+        # Subbay restows
+        for (name, gr_df_ob) in df_ob.groupby(["MacroBay", "MacroRow"]):
+            for (i1, r1) in gr_df_ob.iterrows():
+                for (i2, r2) in gr_df_ob.iterrows():
+                    if r2["POL_nb"] < r1["POD_nb"] and r1["POD_nb"] < r2["POD_nb"]:
+                            if r2["MacroTier"] == r1["MacroTier"] + 1:
+                                overstow[r2["Container"]] = min(overstow[r2["Container"]], r1["POD_nb"])
+        
+        df_ob["overstowPort"] = [ overstow[container] for container in df_ob["Container"] ]
+
+        df = pd.merge(df, df_ob[["Container", "overstowPort", "POD_nb"]], how='left',
+                    left_on=["Container", "POD_nb"], right_on=["Container", "POD_nb"])
+        df["overstowPort"] = np.where(df["overstowPort"].isnull(), np.inf, df["overstowPort"])
+        df["overstowPort"] = [ str(int(row)) if row != np.inf else "" for row in df["overstowPort"] ]
+
+        return df
+    
+    
+    def __add_overstows_20_isolated(self, df:pd.DataFrame, df_stacks:pd.DataFrame, df_rotation:pd.DataFrame) -> pd.DataFrame:
+    
+        df_ob = self.__get_on_board_df(df, df_stacks, 1)
+
+        nbPorts = len(set(df_rotation["ShortName"]))
+
+        overstow = {}
+
+        for sequence in sorted(set(df_rotation["Sequence"]))[:-2]:
+            df_ob = df_ob[df_ob["POD_nb"] > sequence]
+
+            for (name, gr_df_ob) in df_ob[df_ob["MacroTier"] == 0].groupby(["MacroBay", "Row"]):
+                for (i, r) in gr_df_ob.iterrows():
+                    if r["Container"] not in overstow and r["Size"] == "20" and r["Tier"] == r["FirstTier"] and len(gr_df_ob) == 1 and r["POD_nb"] <= nbPorts-2:
+                        overstow[r["Container"]] = sequence
+
+        for key in overstow.keys():
+            initialOverstowPort = df.loc[df["Container"] == key]["overstowPort"].tolist()
+            assert(len(initialOverstowPort) == 1)
+            initialOverstowPort = initialOverstowPort[0]
+            if initialOverstowPort != "":
+                overstow[key] = min(overstow[key], int(initialOverstowPort))
+            df.loc[df["Container"]==key, "overstowPort"] = str(overstow[key])
+            
+        return df
+    
+    def __add_non_reefer_at_reefer_slot(self, df: pd.DataFrame, df_stacks: pd.DataFrame) -> pd.DataFrame:
+        
+        df_stacks["MacroRow"] = [ int(str(sb)[-2:-1]) for sb in df_stacks["SubBay"] ]
+        df_stacks = df_stacks[["Bay", "Row", "Tier", "MacroRow", "FirstTier", "NbReefer"]].rename(columns={"Tier": "MacroTier"})
+        df_stacks[["Bay", "Row", "MacroTier"]] = df_stacks[["Bay", "Row", "MacroTier"]].astype(int)
+        df_ob = df[~common_helpers.is_empty(df["Slot"])].copy()
+
+        df_ob = df_ob[df_ob["POD_nb"] >= 0]
+
+        df_ob["Tier"] = [ int(row[-2:]) for row in df_ob["Slot"] ]
+        df_ob["Row"] = [ int(row[-4:-2]) for row in df_ob["Slot"] ]
+        df_ob["Bay"] = [ int(row[:-4]) for row in df_ob["Slot"] ]
+        
+        df_ob["MacroTier"] = df_ob["Tier"] >= 50
+
+        df_ob = pd.merge(df_ob, df_stacks, how='left', left_on=["Bay", "Row", "MacroTier"], right_on=["Bay", "Row", "MacroTier"])
+
+        df_ob["NbReefer"] = df_ob["NbReefer"].astype(int)
+        def is_reefer_slot(tier: int, first_tier: int, nb_reefers: int):
+            if first_tier is not None and tier is not None:
+                first_tier = int(first_tier)
+                tier = int(tier)
+                return first_tier <= tier and tier <= first_tier + 2 * (nb_reefers - 1)
+            else:
+                # Handle the case where either is None or some other non-numeric type
+                return False  # or whatever is appropriate
+            # return first_tier <= tier and tier <= first_tier + 2 * (nb_reefers - 1)
+        
+        df_ob["NonReeferAtReefer"] = [ "X" if is_reefer_slot(row["Tier"], row["FirstTier"], row["NbReefer"]) and row["cType"] != "RE" else ""
+                                for (_, row) in df_ob.iterrows()]
+
+        df = pd.merge(df, df_ob[["Container", "NonReeferAtReefer", "POD_nb"]], how='left', left_on=["Container", "POD_nb"], right_on=["Container", "POD_nb"])
+
+        return df
+    
+    def __add_dg_class(self, df: pd.DataFrame, df_combined:pd.DataFrame, df_dg_loadlist:pd.DataFrame)-> pd.DataFrame:
+        dg_hazard_id_cols = [col for col in df_combined.columns if "DGS" in col and "HAZARD_ID" in col]
+        dg_free_txt_cols = [col for col in df_combined.columns if "DGS_FTX_FREE_TEXT_DESCRIPTION" in col]
+        dg_kco_col = "EQD_HAN_KCO_HANDLING_INSTRUCTION_DESCRIPTION_CODE"
+
+        dg_cols = ["EQD_ID", "LOC_9_LOCATION_ID"] + dg_hazard_id_cols + dg_free_txt_cols
+        if (dg_kco_col in df_combined.columns):
+            dg_cols.append(dg_kco_col)
+
+        
+        df_copy = df_dg_loadlist[["Serial Number", "POL", "POD", "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)"]]
+        df_dg_ll = df_copy.copy()
+        df_dg_ll.rename(columns={"DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)": "DG-Remark"}, inplace = True)
+
+        dg_remark_dict = {}
+        for index, row in df_dg_ll.iterrows():
+            rowid = (row["Serial Number"], row["POL"])
+            if rowid in dg_remark_dict: dg_remark_dict[rowid] += str(row["DG-Remark"]) + " "
+            else:                       dg_remark_dict[rowid]  = str(row["DG-Remark"]) + " "
+
+        def get_dg_class(row):
+            list_of_dg_codes = [ row[col] for col in dg_hazard_id_cols if not common_helpers.not_defined(row[col]) ] #np.isnan(row[col]) ]
+            if len(list_of_dg_codes) == 0: return "" # If no dg code found, return ""
+            min_dg_code = min(list_of_dg_codes)
+            # Try converting code to an integer to prevent 8.0 instead of 8 when converting to a string
+            try:
+                if min_dg_code == int(min_dg_code): return str(int(min_dg_code))
+            except(ValueError, TypeError):
+                pass
+            
+            return str(min_dg_code)
+        
+        df_dg = df_combined[dg_cols].copy()
+        #df_dg.drop_duplicates(subset=["EQD_ID", "LOC_9_LOCATION_ID"], inplace=True)
+        df_dg["cDG"] = [ get_dg_class(row) for (_, row) in df_dg.iterrows() ]
+
+        reg_sw_1 = re.compile("SW1\ ")
+        reg_sw_2 = re.compile("SW1$")
+        def match_sw1(s): return reg_sw_1.match(s) or reg_sw_2.match(s)
+
+        def match_sw1_cols(r): return bool(any([match_sw1(str(r[col])) for col in dg_free_txt_cols]))
+
+        def match_sw1_dict(r):
+            rowid = (r['EQD_ID'], r['LOC_9_LOCATION_ID'])
+            return (rowid in dg_remark_dict) and bool(match_sw1(dg_remark_dict[rowid]))
+        
+        reg_kc = re.compile("KC")
+        reg_kco = re.compile("KCO")
+        def match_kco(r):
+            if dg_kco_col in r:
+                s = str(r[dg_kco_col])
+                return bool(any([reg_kc.match(s), reg_kco.match(s)]))
+            return False
+
+        df_dg["DGheated"] = [ int(any([match_sw1_cols(row), match_kco(row), match_sw1_dict(row)])) for (_, row) in df_dg.iterrows() ]
+
+        df_dg = df_dg[["EQD_ID", "LOC_9_LOCATION_ID", "cDG", "DGheated"]]#.rename({"EQD_ID":"Container", "LOC_9_LOCATION_ID":"LoadPort"})
+
+        df = pd.merge(df, df_dg, how='left', left_on=['Container', 'LoadPort'], right_on=["EQD_ID", "LOC_9_LOCATION_ID"]) #right_on=['Container', 'LoadPort'])
+
+        return df
+    
+    def __add_dg_exclusion(self, df:pd.DataFrame, df_dg_exclusion:pd.DataFrame, df_stacks:pd.DataFrame)->pd.DataFrame:
+        
+        df_stacks = df_stacks[["Bay", "Tier", "SubBay"]].rename(columns={"Tier": "MacroTier"}).drop_duplicates(inplace=False)
+
+        df_exclusion = pd.merge(df_dg_exclusion, df_stacks, how='left', left_on=["Bay", "MacroTier"], right_on=["Bay", "MacroTier"])
+        df_exclusion.drop(columns=["Bay", "MacroTier"], inplace=True)
+        #print(df_exclusion)
+
+        df_exclusion["SubBay"] = df_exclusion["SubBay"].astype(str)
+        df_exclusion = df_exclusion.groupby(["ContId", "LoadPort"]).agg({"SubBay" : ','.join}).reset_index()
+        df_exclusion.rename(columns={"SubBay" : "Exclusion"}, inplace=True)
+
+        df = pd.merge(df, df_exclusion, how='left', left_on=["Container", "LoadPort"], right_on=["ContId", "LoadPort"])
+
+        return df    
+    
+    def __arrange_columns(self, df:pd.DataFrame)->pd.DataFrame:
+        return df[[
+            "Container", "LoadPort", "POL_nb", "DischPort", "POD_nb",
+            "Size", "cType", "cWeight", "Height",
+            "cDG", "Empty", "Revenue",
+            "Type", "Setting", "Weight", "Slot",
+            "priorityID", "priorityLevel",
+            "overstowPort", "NonReeferAtReefer",
+            "Subport", "Stowage", "DGheated", "Exclusion",
+            "OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_LEFT", "OOG_TOP", "OOG_TOP_MEASURE"
+            ]]
+        
+    def get_df_containers_final(self, df_all_containers:pd.DataFrame, containers_final_dict:dict, d_iso_codes_map:dict, df_uslax:pd.DataFrame, df_revenues:pd.DataFrame, df_rotations:pd.DataFrame, df_stacks:pd.DataFrame, df_dg_loadlist:pd.DataFrame, df_dg_exclusions:pd.DataFrame):
+        df_copy = df_all_containers.copy()
+
+        df_combined_containers_filtered = self.__extract_columns_combined_containers(df_copy, containers_final_dict)
+        df_combined_containers_filtered = self.__add_characteristics(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_sizes_and_heights_to_df(df_combined_containers_filtered, d_iso_codes_map)
+        df_combined_containers_filtered = self.__add_weights(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_oog_combined_containers(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_stowage_handling(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_dg_class(df_combined_containers_filtered, df_all_containers, df_dg_loadlist)
+        df_combined_containers_filtered = self.__add_dg_exclusion(df_combined_containers_filtered, df_dg_exclusions, df_stacks)
+        df_combined_containers_filtered = self.__add_slot_position(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_uslax_priorities(df_combined_containers_filtered, df_uslax)
+        df_combined_containers_filtered = self.__add_revenues(df_combined_containers_filtered, df_revenues)
+        df_combined_containers_filtered = self.__add_pol_pod_nb(df_combined_containers_filtered, df_rotations)
+        df_combined_containers_filtered = self.__add_overstows(df_combined_containers_filtered, df_stacks)
+        df_combined_containers_filtered = self.__add_overstows_20_isolated(df_combined_containers_filtered, df_stacks, df_rotations)
+        df_combined_containers_filtered = self.__add_non_reefer_at_reefer_slot(df_combined_containers_filtered, df_stacks)
+        df_combined_containers_final = self.__arrange_columns(df_combined_containers_filtered)
+    
+        return df_combined_containers_final

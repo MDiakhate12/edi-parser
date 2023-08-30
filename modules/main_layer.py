@@ -14,16 +14,16 @@ import logging
 # root_logger = logging.getLogger()
 # root_logger.handlers = []
 
-# # Create a file handler with 'w' filemode to truncate the file
-# file_handler = logging.FileHandler('log_file.log', mode='w')
-# file_handler.setLevel(logging.DEBUG)
+# # # Create a file handler with 'w' filemode to truncate the file
+# # file_handler = logging.FileHandler('log_file.log', mode='w')
+# # file_handler.setLevel(logging.DEBUG)
 
-# # Set the formatter for the file handler
-# file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# file_handler.setFormatter(file_formatter)
+# # # Set the formatter for the file handler
+# # file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# # file_handler.setFormatter(file_formatter)
 
-# # # Add the file handler to the root logger
-# root_logger.addHandler(file_handler)
+# # # # Add the file handler to the root logger
+# # root_logger.addHandler(file_handler)
 
 # # Create a console handler
 # console_handler = logging.StreamHandler()
@@ -841,7 +841,7 @@ class MainLayer():
                 l_onboard_loadlist,
                 l_POL_POD_revenues_lines
             )
-
+        # update to include Baptiste's work
         groups_completed_csv_name = "Container Groups Completed 0.csv"
         groups_completed_csv_path = f"{self.__py_scripts_out_dir}/{groups_completed_csv_name}"
         self.__DL.write_csv_lines(l_container_groups_completed_lines, groups_completed_csv_path, self.__s3_bucket_out)
@@ -1186,7 +1186,7 @@ class MainLayer():
 
         return df_DG_classes_expanded
     
-    def __output_CPLEX_input_container_csvs(self, df_all_containers: pd.DataFrame, df_filled_slots: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame, d_iso_codes_map: dict) -> None:
+    def __output_CPLEX_input_container_csvs(self, df_all_containers: pd.DataFrame, df_filled_slots: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame, d_iso_codes_map: dict) :
         
         
         # loading stacks
@@ -1221,7 +1221,8 @@ class MainLayer():
             df_DG_classes_grouped_to_save = self.__PL.get_df_DG_classes_grouped_to_save(df_DG_classes_grouped)
             df_DG_classes_grouped_to_save_csv_path = f"{self.__py_scripts_out_dir}/table_7_2_4_grouped.csv"
             self.__DL.write_csv(df_DG_classes_grouped_to_save, df_DG_classes_grouped_to_save_csv_path, self.__s3_bucket_out)
-
+        
+        
         #======================================================================================================================================  
         #DG Exclusions
         #======================================================================================================================================
@@ -1608,7 +1609,7 @@ class MainLayer():
             f_cg_exclusion_zones_nb_dg_name =  "DG Container Groups Exclusion Zones Nb DG.csv"
             f_cg_exclusion_zones_nb_dg_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_nb_dg_name}"
             self.__DL.write_csv(f_cg_exclusion_zones_nb_dg, f_cg_exclusion_zones_nb_dg_csv_path, self.__s3_bucket_out)
-
+        return (df_DG_loadlist, f_loadlist_exclusions) if not self.__reuse_previous_results else None
         #======================================================================================================================================       
         ## Stowing and overstowing ##
     def __get_df_from_baplie_and_return_types(self, baplie_path: str, call_id: str, file_type: str, d_csv_cols_to_segments_map: dict, d_main_to_sub_segments_map: dict, s3_bucket:str):
@@ -2156,7 +2157,11 @@ class MainLayer():
         df_all_containers = pd.concat(l_dfs_containers, axis=0, ignore_index=True)
         df_all_containers.fillna("", inplace=True)
         self.__DL.write_csv(df_all_containers, self.__all_containers_csv_path, s3_bucket=self.__s3_bucket_out)
-
+        
+        
+        
+      
+        
         df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
         # start here
         # d_DG_enrichment_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_enrichment_map.json", self.__s3_bucket_in)
@@ -2167,7 +2172,7 @@ class MainLayer():
         # df = dg_instance.output_DG_loadlist()
         # df.to_csv("output.csv")
         
-        self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
+        df_DG_loadlist, df_loadlist_exclusions= self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
         if len(l_dfs_tanks):                    
             df_tanks_final = pd.concat(l_dfs_tanks, axis=0, ignore_index=True)
             df_tanks_final.fillna("", inplace=True)
@@ -2175,6 +2180,27 @@ class MainLayer():
             all_tanks_csv_path = f"{self.__py_scripts_out_dir}/{all_tanks_csv_name}"
             self.__DL.write_csv(df_tanks_final, all_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
+        #containers final 
+        self.logger.info("Generating final containers.csv file...")
+        df_containers_config = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_combined_containers_final.json", self.__s3_bucket_in)
+        #POL POD revenue
+        POL_POD_revenues_csv_name = "Revenues by Size Type POL POD.csv"
+        POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{self.__service_code}/{POL_POD_revenues_csv_name}"
+        df_POL_POD_revenues = self.__DL.read_csv(POL_POD_revenues_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+        
+        df_uslax_path =  f"{self.__static_in_dir}/los_angeles.csv" if self.__static_in_dir else "los_angeles.csv"
+        df_uslax = self.__DL.read_csv(df_uslax_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+        
+        # loading stacks
+        stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
+        stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
+        df_stacks = self.__DL.read_csv(stacks_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+        
+        df_final_containers_csv_name = "containers.csv"
+        df_final_containers = self.__PL.get_df_containers_final(df_all_containers, df_containers_config, d_iso_codes_map, df_uslax, df_POL_POD_revenues, df_rotation_final, df_stacks, df_DG_loadlist, df_loadlist_exclusions)
+        df_final_containers_csv_path = f"{self.__py_scripts_out_dir}/{df_final_containers_csv_name}"
+        self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
+        
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")
         self.logger.info("*"*80)

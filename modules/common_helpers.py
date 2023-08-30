@@ -2,6 +2,20 @@ import datetime
 import numpy as np
 import pandas as pd
 
+def is_empty(series):
+    return series.isnull() | series.isna() | (series == "")
+
+def not_defined(cell):
+    if isinstance(cell, float):
+        return np.isnan(cell)
+    elif isinstance(cell, str):
+        return cell == ""
+    else:
+        return False
+
+# def not_defined(cell):
+#     return np.isnan(cell) or (cell == "")
+
 def get_compound_segment_header(
     segment_split: list, segment_header_name: str,
     csv_col_prefix_idx: int, csv_compound_col_sep: str="_"

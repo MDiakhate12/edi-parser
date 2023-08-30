@@ -54,7 +54,7 @@ class AnomalyDetectionLayer():
         for container_id in l_err_container_ids:
             self.__add_single_anomaly(criticity, message, error_value, call_id, file_type, container_id)
 
-    
+    #can remove write csv _lines 
     def check_if_errors(self, error_log_path:str, s3_bucket:str="") -> None:
         error_message = '\n'
         l_errors_len = len(self.__l_errors)
