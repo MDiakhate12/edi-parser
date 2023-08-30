@@ -96,10 +96,10 @@ class rotation():
                     ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) &
                     ( [ terminal_code in code for code in self.df_shifting_rates["TERMINAL_CODE"] ] )
                 ]
-        # if not len(df_temp):
-        #     df_temp = self.df_shifting_rates[
-        #             ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) 
-        #     ]
+        if not len(df_temp):
+            df_temp = self.df_shifting_rates[
+                    ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) 
+            ]
         df_temp = df_temp[
                         ( [ "0001" in code for code in df_temp["CARRIER_CODE"] ] ) &
                         (
