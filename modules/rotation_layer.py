@@ -90,16 +90,18 @@ class rotation():
     def __add_RW_costs_to_d_rotation(self, d_rotation: dict, port_name: str) -> None:
 
         terminal_code = d_rotation[port_name]["Terminal"]
-        
+
         port_name_base = port_name[:5] # cz the ports names in the booklet are without number extensions
-        df_temp = self.df_shifting_rates[
+        df_temp_1 = df_temp = self.df_shifting_rates[
                     ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) &
                     ( [ terminal_code in code for code in self.df_shifting_rates["TERMINAL_CODE"] ] )
                 ]
         if not len(df_temp):
-            df_temp = self.df_shifting_rates[
+            df_temp_1 = df_temp = self.df_shifting_rates[
                     ( self.df_shifting_rates["POINT_CODE"] == port_name_base ) 
             ]
+            
+            
         df_temp = df_temp[
                         ( [ "0001" in code for code in df_temp["CARRIER_CODE"] ] ) &
                         (
@@ -108,11 +110,20 @@ class rotation():
                         )
                 ]
 
-        if not len(df_temp):
+
+        if not len(df_temp) and not len(df_temp_1):
+            
             d_rotation[port_name]["LongName"] = ""
             d_rotation[port_name]["CostRw20"] = ""
             d_rotation[port_name]["CostRw40"] = ""
             d_rotation[port_name]["CostRw45"] = ""
+        
+        elif not len(df_temp) and len(df_temp_1):
+            d_rotation[port_name]["LongName"] = df_temp_1["POINT_NAME"].iloc[0]
+            d_rotation[port_name]["CostRw20"] = df_temp_1["TARIFF_20_FULL_SQS"].iloc[0]
+            d_rotation[port_name]["CostRw40"] = df_temp_1["TARIFF_40_FULL_SQS"].iloc[0]
+            d_rotation[port_name]["CostRw45"] = df_temp_1["TARIFF_45_FULL_SQS"].iloc[0]
+                
         else:
             d_rotation[port_name]["LongName"] = df_temp["POINT_NAME"].iloc[0]
             d_rotation[port_name]["CostRw20"] = df_temp["TARIFF_20_FULL_SQS"].iloc[0]
