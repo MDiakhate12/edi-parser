@@ -4,7 +4,6 @@ import logging
 import json
 import os
 import sys
-import datetime 
 import traceback
 
 sys.path.insert(0, "/var/task/Pre-processing-CICD-1")

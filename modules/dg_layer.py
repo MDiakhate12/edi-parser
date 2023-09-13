@@ -258,7 +258,7 @@ class DG:
             # 0           C1         Hazard1          100
             # 2           C3         Hazard2          300
         """
-        
+        df_all_containers = df_all_containers.copy()
         if "DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_1" not in df_all_containers.columns:
             df_all_containers["DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_1"] = ""
             
@@ -647,7 +647,7 @@ class DG:
         DG_cols_ordered_list.append("Zone")
 
         df_DG_loadlist = df_DG_loadlist[DG_cols_ordered_list]
-
+        df_DG_loadlist.reset_index(inplace=True, drop=True)
         return df_DG_loadlist
 
     def get_df_dg_loadlist(self, df_all_containers:pd.DataFrame) -> pd.DataFrame:
@@ -666,8 +666,8 @@ class DG:
         self.__get_non_flammable_state(df_DG_loadlist)
         self.__get_zone_port(df_DG_loadlist)
         self.__get_loading_remarks(df_DG_loadlist)
-        self.__add_not_permitted_bay_column(df_DG_loadlist)
-        self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
+        df_DG_loadlist = self.__add_not_permitted_bay_column(df_DG_loadlist)
+        df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
         return df_DG_loadlist
 
 ## =======================================================================================================================        

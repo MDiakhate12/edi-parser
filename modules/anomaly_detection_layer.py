@@ -8,7 +8,6 @@ from modules import common_helpers
 class AnomalyDetectionLayer():
     def __init__(self, DL:object) -> None:
         self.__edi_file_name_baplie_type_map = {"onboard": "OnBoard.edi", "container": "LoadList.edi", "tank": "Tank.edi"}
-        self._DL = DL
         # data_anomalies: defined as a class attribute so it would not have to be kept passing around
         self.__l_errors = []
         self.__error_num = 0
@@ -54,15 +53,14 @@ class AnomalyDetectionLayer():
         for container_id in l_err_container_ids:
             self.__add_single_anomaly(criticity, message, error_value, call_id, file_type, container_id)
 
-    #can remove write csv _lines 
-    def check_if_errors(self, error_log_path:str, s3_bucket:str="") -> None:
+
+    def check_if_errors(self) -> None:
         error_message = '\n'
         l_errors_len = len(self.__l_errors)
         if l_errors_len and l_errors_len != self.__warnings_count:
             error_message += ('\n').join(str(error) for error in self.__l_errors) + '\n'
-            lines = [json.dumps(error_dict) for error_dict in self.__l_errors]
-            self._DL.write_csv_lines(lines, error_log_path, s3_bucket)
-            raise Exception(error_message) 
+            raise Exception(error_message)
+
 
         
     # def check_if_errors(self) -> None:
@@ -829,13 +827,13 @@ class AnomalyDetectionLayer():
                 message = f"Port '{port}' not found for territory '{ter}'"
                 self.__add_single_anomaly("Error", message, f"Missing Port: {port} in cranes referential_file", file_type="rotations_intermediate")
     
-    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str,dynamic_out_dir:str,s3_bucket:str )->None:
+    def check_sim_with_referentials(self, port_codes_sim:list, port_codes_ref:list, service_line:str)->None:
         for i, port in enumerate(port_codes_sim):
                 if port_codes_ref.count(port) == 0:
                     message = f"Port: {port} in simulation is not found in referential for service_line {service_line}..."
                     error_value = "TBD"
                     self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
-        self.check_if_errors(dynamic_out_dir, s3_bucket)
+        self.check_if_errors()
             
     def no_matching_port_check(self, port:str, index: int):
         
@@ -864,13 +862,13 @@ class AnomalyDetectionLayer():
             mismatching_ports.append(message)
         return mismatching_ports
     
-    def check_if_no_output_postprocess(self, files_in_output:str, dynamic_out_dir:str, s3_bucket:str) -> None:
+    def check_if_no_output_postprocess(self, files_in_output:str) -> None:
         if "output.csv" not in files_in_output:
             criticity = 'ERROR'
             message = "There are no 'output.csv' result from CPLEX..."
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, file_type='output.csv')
-            self.check_if_errors(dynamic_out_dir, s3_bucket)
+            self.check_if_errors()
             
     def validate_data(self, data_dict: dict) -> None:
         """

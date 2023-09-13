@@ -8,33 +8,31 @@ if "" in DEFAULT_MISSING:
 
 import logging
 # Set up the root logger with the desired log level and format
-
-
-# # Disable the default stream handler of the root logger
+# Disable the default stream handler of the root logger
 # root_logger = logging.getLogger()
 # root_logger.handlers = []
 
-# # # Create a file handler with 'w' filemode to truncate the file
-# # file_handler = logging.FileHandler('log_file.log', mode='w')
-# # file_handler.setLevel(logging.DEBUG)
+# # Create a file handler with 'w' filemode to truncate the file
+# file_handler = logging.FileHandler('log_file.log', mode='w')
+# file_handler.setLevel(logging.DEBUG)
 
-# # # Set the formatter for the file handler
-# # file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# # file_handler.setFormatter(file_formatter)
+# # Set the formatter for the file handler
+# file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# file_handler.setFormatter(file_formatter)
 
-# # # # Add the file handler to the root logger
-# # root_logger.addHandler(file_handler)
+# # # Add the file handler to the root logger
+# root_logger.addHandler(file_handler)
 
-# # Create a console handler
+# Create a console handler
 # console_handler = logging.StreamHandler()
 # console_handler.setLevel(logging.DEBUG)
-# # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # # # Set the formatter for the console handler
+# # # Set the formatter for the console handler
 # console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 # console_handler.setFormatter(console_formatter)
 
-# # # # # Add the console handler to the root logger
+# # # # Add the console handler to the root logger
 # root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
@@ -46,7 +44,7 @@ from modules.lashing_calculation_layer import Lashing
 from modules.vessel import Vessel
 from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
-# from modules.dg_layer import DG
+from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
 class MainLayer():
@@ -56,12 +54,9 @@ class MainLayer():
 
         # initialize data layer 
         self.__DL = DL(logger, s3_bucket_out, s3_bucket_in)
-        
         d_event_json = event
-        
         # other params
         path = d_event_json.get("path", "")
-        
         self.__simulation_id = d_event_json["simulation_id"]
         self.__vessel_id = d_event_json.get("vesselImo", "")
         self.__target_port = d_event_json.get("port", "")
@@ -69,23 +64,17 @@ class MainLayer():
         self.__s3_bucket_out = s3_bucket_out
         self.__s3_bucket_in = s3_bucket_in
         logger.info(f"self.__reuse_previous_results : {self.__reuse_previous_results}")
-        
         ## DG RULES if Master or Slot
         self.__DG_Rules = d_event_json.get("dg_exception_rules", "")
-        
         ## directories
         self.__init_file_paths_from_event(path, self.__simulation_id, self.__s3_bucket_out)
-        
         ## initialize anomaly detection
         self.__AL = AL(self.__DL)
-
         # for reading, writing, and mapping functionalities
         self.__l_baplies_filepaths = []
         self.__d_seq_num_to_port_name = {}
         self.__l_POL_POD_containers_baplies_paths = []
         self.__l_POL_POD_csvs_paths = []
-
-
         # folder name params
         #check for correctness of files 
         logger.info("before __init_params_from_folders_names")
@@ -315,7 +304,7 @@ class MainLayer():
         d_stacks_rows_by_bay_row_deck = self.__ML.get_d_stacks_rows_by_bay_row_deck(df_stacks)
         
         self.__AL.check_flying_containers(d_container_info_by_bay_row_tier, d_stacks_rows_by_bay_row_deck, d_type_to_size_map)
-        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
+        self.__AL.check_if_errors()
         
         onboard_csv_name = "Containers OnBoard Loadlist 0.csv"
         onboard_csv_path = f"{self.__py_scripts_out_dir}/{onboard_csv_name}"
@@ -323,470 +312,6 @@ class MainLayer():
 
         return df_onboard_loadlist
     
-    # all dg in one container listed separately not the lowest as agreed.
-    # Extract more variable into df_all_containers, aka. (sublabel2 if exists, TLQ(limited quantity), etc. ) 
-    def __output_DG_loadlist(self, df_all_containers: pd.DataFrame,d_DG_enrichment_map: dict, imdg_codes_df:pd.DataFrame) -> pd.DataFrame:
-        self.logger.info("Extracting and saving DG LoadList...")
-        
-        # d_DG_loadlist_cols_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_cols_map.json", self.__s3_bucket_in)
-        df_copy = df_all_containers.copy()
-    
-        if "DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_1" not in df_copy.columns:
-            df_copy["DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_1"] = ""
-    
-    
-        naming_schema = d_DG_enrichment_map["DG_LOADLIST_SCHEMA"]
-        
-        df_DG_loadlist = self.__PL.get_df_DG_loadlist_exhaustive(df_all_containers, naming_schema)
-        # df_DG_loadlist.to_csv("output_old.csv")
-        # fill for now as all "x"
-        # Need to explore type of for any indicator to other than closed freight container 
-        # Assumption is all containers are closed and and DGs' are in packing 
-        df_DG_loadlist["Closed Freight Container"] = "x"
-        df_DG_loadlist["Package Goods"] = "x"
-
-        # Mapping for Packaging Group (1,2,3) -> (I,II,III)
-        PGr_map = d_DG_enrichment_map["PACKAGING_GROUP"]
-        df_DG_loadlist["PGr"] = df_DG_loadlist["PGr"].map(PGr_map)
-
-        # Stowage Category 
-        # fix data type and try 
-        df_DG_loadlist.fillna('', inplace=True)
-        imdg_codes_df.fillna('', inplace=True)
-        df_DG_loadlist = df_DG_loadlist.applymap(str)
-        imdg_codes_df = imdg_codes_df.applymap(str)
-        df_DG_loadlist['UN'] = df_DG_loadlist['UN'].astype(int).apply(lambda x: '{:04d}'.format(x))
-        imdg_codes_df['UNNO'] = imdg_codes_df['UNNO'].astype(int).apply(lambda x: '{:04d}'.format(x))
-        #Set index to a column as Join resets index 
-        df_DG_loadlist["Index"] = df_DG_loadlist.index 
-
-        #Joining DG loadlist to Imdg code 
-        ### later step --> match to ammendment version as well in case any beside 40-20 is used in Baplie message by user 
-    
-        df_DG_loadlist["Ammendmant Version"] = df_DG_loadlist.apply(lambda x:  x['Ammendmant Version'][:2] , axis=1)
-        
-        df_DG_loadlist = df_DG_loadlist.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
-                        how='left' ,left_on=['Ammendmant Version', 'Class', 'SubLabel1', 'SubLabel2','UN', 'PGr'], right_on= ['IMDG_AMENDMENT','CLASS','SUBLABEL1', 'SUBLABEL2','UNNO','PG'])
-
-        df_DG_loadlist['Stowage Category'] = df_DG_loadlist['STOWCAT']
-
-        # loop over rows of the data frame
-        for idx, row in df_DG_loadlist.iterrows():
-
-            if row['UNNO'] == '1950':
-
-                if 'MAX' in row['Proper Shipping Name (Paragraph B of DOC)'].upper() and 'TLQ' not in row['Limited Quantity']: 
-                    row['Limited Quantity'] = 'TLQ'
-
-                if 'WASTE' in row['PSN'] and 'WASTE' not in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if 'TLQ' in row['Limited Quantity'] and 'None' in row['LQ']: 
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if 'TLQ' not in row['Limited Quantity'] and 'None' not in row['LQ']:
-                    df_DG_loadlist.drop(idx, inplace=True)
-            
-            # assumption for now take lowest CATEGORY
-            # if row['UNNO'] == ['3480', '3481']:
-            #     if row['PSN'] not in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-            #         df_DG_loadlist.drop(idx, inplace=True)
-                
-            if row['UNNO'] == '3528':
-                if 'BELOW' in row['VARIATION'].upper() and row['flashpoints'] >= 23:
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if 'ABOVE' in row['VARIATION'].upper() and row['flashpoints'] < 23:
-                    df_DG_loadlist.drop(idx, inplace=True)
-
-
-            if row['UNNO'] == '2037':
-                if 'WASTE' in row['PSN'].upper() and 'WASTE' not in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if 'WASTE' not in row['PSN'].upper() and 'WASTE' in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-
-            if row['UNNO'] == ['3322', '3325', '3327']:
-                if '4.2' in row['SubLabel1'].upper() and '4.2' not in row['SUBLABEL1'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if '4.2' not in row['SubLabel1'].upper() and '4.2' in row['SUBLABEL1'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-
-            if row['UNNO'] == ['2215', '2280', '1381', '2870']:
-                if row['PSN'].upper() not in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-    
-            if row['UNNO'] == ['3373']:
-                if 'P650' in row['VARIATION'] and 'P650' not in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-
-                if 'P650' not in row['VARIATION'] and 'P650' in row['Proper Shipping Name (Paragraph B of DOC)'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                    
-            if row['UNNO'] == ['2794']:
-                if 'x' in row['Closed Freight Container'] and 'B' in row['STOWCAT'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-                
-                if 'x' not in row['Closed Freight Container'] and 'A' in row['STOWCAT'].upper():
-                    df_DG_loadlist.drop(idx, inplace=True)
-
-        df_DG_loadlist.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
-                                               "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight",
-                                                "PGr", "UN", "Stowage Category", "Index"], inplace=True)
-        
-
-        df_matched = df_DG_loadlist.drop(df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()].index.to_list())
-        df_matched = df_matched.reset_index(drop=True)
-        
-        # check and handle duplicates of same stowage category for DG matching a category from imdg code
-        df_matched = df_DG_loadlist.drop(df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()].index.to_list())
-       
-        # get DG Goods that did not match to any category from imdg code 
-        df_not_matched = df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()]
-        df_not_matched = df_not_matched[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
-        'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Loading remarks', 'Limited Quantity',
-        'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SegregationGroup', 'SetPoint',
-         'Stowage and segregation', 'Package Goods', 'Stowage Category', 'not permitted bay 74', 'Zone']]
-       
-        
-
-        # try matching on UN Number without class and Subclass, as to handle class 1 in particular or dg with incorrect class, sublabel or generic subsidiary risk (eg. 2 instead of 2.1)
-
-        df_not_matched = df_not_matched.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
-                         how='left' ,left_on=['Ammendmant Version','UN', 'PGr'], right_on= ['IMDG_AMENDMENT','UNNO','PG'])
-        df_not_matched['Stowage Category'] = df_not_matched['STOWCAT']
-        df_not_matched.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
-                                               "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight",
-                                                "PGr", "UN", "Stowage Category"], inplace=True)
-        
-        df_not_matched.reset_index(drop=True)
-        
-        # Concat both dataframes
-        df_DG_loadlist = pd.concat([df_matched, df_not_matched],ignore_index=True) 
-        df_copy1 = df_DG_loadlist.copy()
-        df_copy1['Stowage Category'] = df_copy1['Stowage Category'].map(lambda x: str(x))
-        df_copy1.reset_index(inplace= True, drop=True)
-        
-        #Stowage Category order from most to least critical 
-        sort_order= ["1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]
-        # Group By Serial Number and order in decreasing criticality
-        df_copy1= df_copy1.groupby(["Serial Number", "POL", "POD", "Class", "SubLabel1", "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight", "PGr", "UN", "Stowage Category"],group_keys= False).apply(lambda x: x.sort_values(by="Stowage Category", key=lambda y: [sort_order.index(v) for v in y]))
-        df_copy1.reset_index( drop=True)
-        
-        # df_copy1.set_index("level_0", inplace=True)
-        # Keep first row which is most critical
-        df_copy1.drop_duplicates(subset = ["Serial Number", "POL", "POD", "Class", "SubLabel1", "PGr", "UN", "Stowage Category"], inplace=True)
-        
-        # Group Back both DataFrames 
-        df_DG_loadlist = df_copy1.copy()
-        stow = []
-        seg = []
-        df_DG_loadlist.fillna('', inplace=True)
-        df_DG_loadlist = df_DG_loadlist.reset_index()
-        for idx, row in df_DG_loadlist.iterrows():
-            stow_list = df_DG_loadlist["DGIES_STOW"].iloc[idx].split()
-            seg_list = df_DG_loadlist["DGIES_SEG"].iloc[idx].split()
-            merge_list = stow_list + seg_list
-            
-            
-            merge_list = [x for x in merge_list if x != "nan"]
-
-            seg_list = []
-            stow_list = []
-            for i, val in enumerate(merge_list):           
-            
-                if "SGG" in val:
-                    seg_list.append(val) 
-                else: 
-                    stow_list.append(val.rstrip("abcde"))
-                
-            stow.append(', '.join(stow_list))
-            seg.append(', '.join(seg_list))
-
-        df_DG_loadlist['Stowage and segregation'] = stow
-        df_DG_loadlist['SegregationGroup'] = seg
-        df_DG_loadlist.set_index('index',inplace=True)
-
-        # filling up LQ, State, Flammability and Zone  
-        df_DG_loadlist["Limited Quantity"] = df_DG_loadlist.apply(lambda x: "yes" if x['Limited Quantity'] == "TLQ" else "" , axis=1)
-        df_DG_loadlist["Liquid"] = df_DG_loadlist.apply(lambda x: "x" if (x['STATE'] == "L" or "LIQUID" in x['Proper Shipping Name (Paragraph B of DOC)'].upper()
-                                                                          or "SOLUTION" in x['Proper Shipping Name (Paragraph B of DOC)'].upper()) 
-                                                                          else "" , axis=1)
-        
-        df_DG_loadlist["Solid"] = df_DG_loadlist.apply(lambda x: "x" if (x['STATE'] == "S" or "SOLID" in x['Proper Shipping Name (Paragraph B of DOC)'].upper() 
-                                                                         or "DRY" in x['Proper Shipping Name (Paragraph B of DOC)'].upper() 
-                                                                         or "POWDER" in x['Proper Shipping Name (Paragraph B of DOC)'].upper()) 
-                                                                         else "" , axis=1)
-        ## Check criteria for flammability 
-        df_DG_loadlist["Flammable"] = df_DG_loadlist.apply(lambda x: "x" if (x['Class'] in ['1.3','2.1','3','4.1','4.2','4.3'] 
-                                                                     or x['SubLabel1'] in ['1.3','2.1','3','4.1','4.2','4.3'] 
-                                                                     or x['SubLabel2'] in ['1.3','2.1','3','4.1','4.2','4.3'] 
-                                                                     or "FLAMMABLE" in x['Proper Shipping Name (Paragraph B of DOC)'].upper() 
-                                                                     or x['Flammable'] == "x" ) else "" , axis=1)
-
-        df_DG_loadlist["Non-Flammable"] = df_DG_loadlist.apply(lambda x: "" if x['Flammable'] == "x" else "x" , axis=1)
-
-        Zone_map = d_DG_enrichment_map["PORT_ZONE"]
-        df_DG_loadlist["Zone"] = df_DG_loadlist["POL"].str[:5].map(Zone_map)
-        
-        #Not Permitted Bay 74 
-        Not_Permitted_Bay_74_list = d_DG_enrichment_map["UNNO_not_permitted_bay_74"]
-        df_DG_loadlist["not permitted bay 74"] = df_DG_loadlist.apply(lambda x: "x" if x['UN'] in Not_Permitted_Bay_74_list  else "" , axis=1)
-        # Class_Only_Not_Permitted_Bay_74_dict = d_DG_enrichment_map["Not_permitted_Bay74_Class_only"]
-        Dynamic_Not_Permitted_Bay_74_dict = d_DG_enrichment_map["Dynamic_Not_Permitted_Bay74"]
-    
-        df_copy = df_DG_loadlist.copy(deep=False)
-        df_copy['FlashPoints'].fillna("-1000", inplace=True)
-        df_copy['FlashPoints'] = pd.to_numeric(df_copy['FlashPoints'])
-
-        # # to be set later in function for modularity 
-        # #def __classify_flashpoint(self, fp_low_threshold, fp_high_threshold, dg_loadlist: pd.DataFrame) -> pd.DataFrame:
-
-        fp_low_threshold = float(d_DG_enrichment_map["FP_Threshold_Low"]) 
-        fp_high_theshold = float(d_DG_enrichment_map["FP_Threshold_High"])  
-        
-        PE_Conditions = [
-            (df_copy['FlashPoints'] == -1000.0),
-            (df_copy['FlashPoints'] < fp_low_threshold),
-            (df_copy['FlashPoints']  >= fp_low_threshold) & (df_copy['FlashPoints']  <= fp_high_theshold),
-            (df_copy['FlashPoints']  >  fp_high_theshold)
-        ]
-        PE_Categories = ['0', '1', '2','3']
-        temp_list= []
-        temp_list = np.select(PE_Conditions, PE_Categories)
-        df_copy['FlashPoint_Category'] = temp_list   
-
-        df_copy["new"] = df_copy.apply(lambda x: ','.join([str(x['Class']), str(x['Liquid']),str(x['Solid']), str(x['FlashPoint_Category'])]), axis=1)   
-        df_copy["not permitted bay 74_dynamic"]= df_copy["new"].map(Dynamic_Not_Permitted_Bay_74_dict)  
-        df_copy["not permitted bay 74"] = df_copy.apply(lambda x: "x" if ((x["not permitted bay 74_dynamic"] == "x" and x["not permitted bay 74"] != "x") or (x["not permitted bay 74"] == "x")) else "" , axis=1)
-        # Loading Remarks 
-        segregation_group_map = d_DG_enrichment_map["SEGREGATION_GROUP"]
-        df_copy["Loading remarks"] = df_copy["SegregationGroup"].apply(lambda row: "" if row == "" else ", ".join([segregation_group_map[value] for value in row.split(", ")]))
-
-
-        df_DG_loadlist = df_copy.copy()        
-
-        df_DG_loadlist = df_DG_loadlist[["Serial Number","Operator","POL","POD","Type","Closed Freight Container",
-                           "Weight","UN","Class","SubLabel1",
-                           "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)","FlashPoints",
-                           "Loading remarks","Limited Quantity","Marine Pollutant","PGr","Liquid","Solid",
-                           "Flammable","Non-Flammable","Proper Shipping Name (Paragraph B of DOC)","SegregationGroup",
-                           "SetPoint","Stowage and segregation","Package Goods","Stowage Category","not permitted bay 74",
-                           "Zone"]]
-                
-        DG_csv_name =  "DG Loadlist.csv"
-        DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
-        self.__DL.write_csv(df_DG_loadlist, DG_csv_path, self.__s3_bucket_out)
-        
-        return df_DG_loadlist
-## DG Exclusion LoadList Related Functions 
-#==============================================================================================================================================
-    # getting the DG macro category depending on elements provided by the load list
-    def __get_DG_category(self, un_no: str, imdg_class: str, sub_label: str,
-                        as_closed: str, liquid: str, solid: str, flammable: str, flash_point: float, l_explosion_protect_IIB_T4: list, l_IMDG_Class_1_S: list) -> str:
-        
-        if ( un_no in l_IMDG_Class_1_S)\
-        or (imdg_class == '6.1' and solid == True and as_closed == True)\
-        or (imdg_class == '8' and liquid == True and flash_point is None)\
-        or (imdg_class == '8' and solid == True)\
-        or (imdg_class == '9' and as_closed == True):
-            return 'PPP'
-        
-        if (imdg_class == '2.2')\
-        or (imdg_class == '2.3' and flammable == False and as_closed == True)\
-        or (imdg_class == '3' and flash_point >= 23 )\
-        or (imdg_class == '4.1' and as_closed == True)\
-        or (imdg_class == '4.2' and as_closed == True)\
-        or (imdg_class == '4.3' and liquid == True and as_closed == True and (flash_point >= 23 or flash_point is None))\
-        or (imdg_class == '4.3' and solid == True and as_closed == True)\
-        or (imdg_class == '5.1' and as_closed == True)\
-        or (imdg_class == '8' and liquid == True and as_closed == True and flash_point >= 23 and flash_point <= 60):
-            return 'PP'
-        
-        if (imdg_class == '6.1' and liquid == True and flash_point is None):
-            return 'PX'
-        
-        if (imdg_class == '6.1' and liquid == True and flash_point >= 23 and flash_point <= 60 and as_closed == True):
-            return 'PX+'
-        
-        if (imdg_class == '2.1' and as_closed == True and un_no not in l_explosion_protect_IIB_T4)\
-        or (imdg_class == '2.3' and flammable == True and as_closed == True and un_no not in l_explosion_protect_IIB_T4 and sub_label != '2.1')\
-        or (imdg_class == '3' and flash_point < 23 and as_closed == True and un_no not in l_explosion_protect_IIB_T4)\
-        or (imdg_class == '6.1' and liquid == True and flash_point < 23 and as_closed == True and un_no not in l_explosion_protect_IIB_T4)\
-        or (imdg_class == '8' and liquid == True and flash_point < 23 and as_closed == True and un_no not in l_explosion_protect_IIB_T4):
-            return 'XP'
-        
-        if (imdg_class == '6.1' and solid == True and as_closed == False)\
-        or (imdg_class == '9' and as_closed == False):
-            return 'XX-'
-        
-        if (imdg_class == '2.1' and (as_closed == False or un_no in l_explosion_protect_IIB_T4))\
-        or (imdg_class == '2.3' and flammable == True and (as_closed == False or un_no in l_explosion_protect_IIB_T4 or sub_label == '2.1'))\
-        or (imdg_class == '2.3' and flammable == False and as_closed == False)\
-        or (imdg_class == '3' and flash_point < 23 and (as_closed == False or un_no in l_explosion_protect_IIB_T4))\
-        or (imdg_class == '4.1' and as_closed == False)\
-        or (imdg_class == '4.2' and as_closed == False)\
-        or (imdg_class == '4.3' and liquid == True and (as_closed == False or flash_point < 23))\
-        or (imdg_class == '4.3' and solid == True and as_closed == False)\
-        or (imdg_class == '5.1' and as_closed == False)\
-        or (imdg_class == '5.2')\
-        or (imdg_class == '6.1' and liquid == True and flash_point < 23 and (as_closed == False or un_no in l_explosion_protect_IIB_T4))\
-        or (imdg_class == '6.1' and liquid == True and flash_point >= 23 and flash_point <= 60 and as_closed == False)\
-        or (imdg_class == '8' and liquid == True and flash_point < 23 and (as_closed == False or un_no in l_explosion_protect_IIB_T4))\
-        or (imdg_class == '8' and liquid == True and flash_point >= 23 and flash_point <= 60 and as_closed == False):
-            return 'XX'
-            
-        if (imdg_class[0] == '1' and un_no not in l_IMDG_Class_1_S):
-            return 'XX+'
-            
-        if (imdg_class == '6.2')\
-        or (imdg_class == '7'):
-            return 'XXX'
-        
-        return '?'
-
-    
-
-    def __expand_exclusion(self, set_exclusions: set, l_updates: list) -> set:
-        
-        # taking update elements one by one
-        for update in l_updates:
-            
-            # if update is a simple string, it is the string bbbT, bbb bay number, T macro-tier 0 or 1
-            if type(update) == str:
-                # look if there is already an element concerning this macro combination in the set, if yes remove it
-                bay = update[0:3]
-                macro_tier = update[3]
-                for exclusion in set_exclusions:
-                    if exclusion[0] == bay and exclusion[2][0] == macro_tier:
-                        set_exclusions.remove(exclusion)
-                        break
-                # and in any case create it, the exclusion is on the totality of the bay + macro-tier
-                set_exclusions.add((bay, None, (macro_tier, None)))
-                
-            # if update is a triplet, before adding it, verify it is not already covered by an existing one
-            if type(update) == tuple:
-                bay = update[0]
-                l_rows = update[1]
-                macro_tier = update[2][0]
-                l_tiers = update[2][1]
-                # we should refine, but it is useless, at least for the time being
-                # so integrate if the total coverage of the bay + macro tier is not already existing
-                integration = True
-                for exclusion in set_exclusions:
-                    if exclusion[0] == bay and exclusion[2][0] == macro_tier:
-                        if exclusion[1] is None and exclusion[2][1] is None:
-                            integration = False
-                            break
-                if integration == True:
-                    set_exclusions.add(update)
-        
-        return set_exclusions
-# ==============================================================================================================================================
-
-# DG by CG Related Functions 
-    def __get_stacks_capacities(self, fn_stacks: pd.DataFrame) -> dict:
-        
-        d_stacks = {}
-
-        #f_stacks = open(fn_stacks, 'r')
-        
-        for idx, row in fn_stacks.iterrows():
-
-            bay = fn_stacks["Bay"].iloc[idx] # sur 2 caractères
-            row = fn_stacks["Row"].iloc[idx] # sur 2 caractères
-            macro_tier = fn_stacks["Tier"].iloc[idx]
-            subbay = fn_stacks["SubBay"].iloc[idx] 
-            first_tier = fn_stacks["FirstTier"].iloc[idx]
-            max_nb_std_cont = int(fn_stacks["MaxNbOfStdCont"].iloc[idx])
-            odd_slot = int(fn_stacks["OddSlot"].iloc[idx])
-            max_nb_45 = int(fn_stacks["MaxNb45"].iloc[idx])
-            min_40_sub_45 = int(fn_stacks["Min40sub45"].iloc[idx])
-            nb_reefer = int(fn_stacks["NbReefer"].iloc[idx])
-            max_weight = float(fn_stacks["MaxWeight"].iloc[idx])
-            stack_height = float(fn_stacks["StackHeight"].iloc[idx])
-            max_nb_HC_at_max_stack = int(fn_stacks["MaxNbHCAtMaxStack"].iloc[idx])
-        
-            stack = (bay, row, macro_tier)
-        
-            d_stacks[stack] = {'subbay': subbay, 'first_tier': first_tier, 
-                            'max_nb_std_cont': max_nb_std_cont, 'odd_slot': odd_slot, 'nb_reefer': nb_reefer,
-                            'max_nb_45': max_nb_45, 'min_40_sub_45': min_40_sub_45,
-                            'max_nb_HC_at_max_stack': max_nb_HC_at_max_stack,
-                            'stack_height': stack_height, 'max_weight': max_weight}
-        
-        return d_stacks
-
-
-    def __get_bays_macro_tiers_l_subbays(self, d_stacks: dict) -> dict:
-        
-        d_bay_macro_tier_l_subbays = {}
-        
-        for (bay, row, macro_tier), d_stack_items in d_stacks.items():
-            
-            bay_macro_tier = (bay, macro_tier)
-            subbay = d_stack_items['subbay']
-            
-            if bay_macro_tier not in d_bay_macro_tier_l_subbays:
-                d_bay_macro_tier_l_subbays[bay_macro_tier] = set()
-            d_bay_macro_tier_l_subbays[bay_macro_tier].add(subbay)
-        
-        return d_bay_macro_tier_l_subbays   
-
-    def __list_areas_for_zone_intersections(self, d_ix_zones: dict, l_zones: list) -> dict:
-        
-        l_ix_zones = [(ix_zone, nb_containers) for ix_zone, nb_containers in d_ix_zones.items()]
-        
-        d_combi_zones = {}
-        # for N zones, 2 ** N combinations
-        N = len(d_ix_zones)
-        nb_combi = 2 ** N
-        for cx in range(nb_combi):
-            # eliminate the empty combination
-            if cx == 0: continue
-            # binary string of 0 or 1, left-padded with 0
-            # 2: because of prefix '0b'
-            cx_bin = bin(cx)[2:].zfill(N)
-            s_combi_area = set()
-            nb_containers = 0
-            first_zone = True
-            for ix, cix in enumerate(cx_bin):
-                if cix == '0': continue
-                if first_zone == True:
-                    s_combi_area = l_zones[l_ix_zones[ix][0]].copy()
-                    first_zone = False
-                else:
-                    s_combi_area = s_combi_area.intersection(l_zones[l_ix_zones[ix][0]].copy())
-                nb_containers += l_ix_zones[ix][1]
-            if len(s_combi_area) > 0:
-                #for ix, cix in enumerate(cx_bin): print(ix, cix)
-                #print(nb_containers)
-                if frozenset(s_combi_area) not in d_combi_zones:
-                    d_combi_zones[frozenset(s_combi_area)] = 0
-                # important point, we take the maximum of sums, and not sum of sums
-                # that is the number of the most complete configuration
-                # in case of having more of one combination for the same final zone, 
-                # we don't sum up, and just take the maximum of container numbers, 
-                # which represents the maximal covering
-                d_combi_zones[frozenset(s_combi_area)] = max(nb_containers, d_combi_zones[frozenset(s_combi_area)])
-                
-        return d_combi_zones
-
-    def __get_zone_list_subbays(self, s_area: frozenset, d_bay_macro_tier_l_subbays: dict) -> set:
-        
-        s_area_subbays = set()
-        for area in s_area:
-            for subbay in d_bay_macro_tier_l_subbays[area]:
-                if subbay not in s_area_subbays:
-                    s_area_subbays.add(subbay)
-                    
-        return s_area_subbays
-
-#===============================================================================================================================================
-
     def __output_stowing_info(self, l_onboard_loadlist_lines: list, l_stacks_lines: list) -> None:
         subbays_csv_name = "SubBays Capacities Extrait Prototype MP_IN.csv"
         subbays_csv_path = f"{self.__vessels_static_in_dir}/{subbays_csv_name}"
@@ -802,7 +327,7 @@ class MainLayer():
             )
 
         self.__AL.check_reefer_containers_at_non_reefer_slots(l_reefers_at_non_reefer)
-        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
+        self.__AL.check_if_errors()
 
         stowing_info_csv_name = "Containers Stowing Info 0.csv"
         stowing_info_csv_path = f"{self.__py_scripts_out_dir}/{stowing_info_csv_name}"
@@ -849,346 +374,9 @@ class MainLayer():
         groups_containers_csv_name = "Container Groups Containers.csv"
         groups_containers_csv_path = f"{self.__py_scripts_out_dir}/{groups_containers_csv_name}"
         self.__DL.write_csv_lines(l_container_groups_containers_lines, groups_containers_csv_path, self.__s3_bucket_out)
-
-    def __update_table_7_2_4(self, row, table, stowage_code, class_sublabel, new_value, unique_list) -> None:
-        segregation_list = str(row['Stowage and segregation']).split(',')
-        if stowage_code in segregation_list and stowage_code not in [code.strip() for code in segregation_list if code != stowage_code] and class_sublabel in unique_list:
-            if table.loc[row['Class'], class_sublabel] in {'X', ''} or float(table.loc[row['Class'], class_sublabel]) < new_value:
-                table.at[(row['Class'], class_sublabel)] = new_value
-                
-            if table.loc[class_sublabel, row['Class']] in {'X', ''} or float(table.loc[class_sublabel, row['Class']]) < new_value:
-                table.at[(class_sublabel, row['Class'])] = new_value
-
-    
-    def __update_table_7_2_4_sgg(self, row, dg_loadlist, table, stowage_code, sgg, new_value, unique_list):
-        segregation_list = str(row['Stowage and segregation']).split(',')
-        if stowage_code in segregation_list and stowage_code not in [code.strip() for code in segregation_list if code != stowage_code] and sgg in unique_list:
-    
-            for indx, ro in dg_loadlist.iterrows():
-                
-                if sgg in ro['SegregationGroup']: 
-    
-                    if table.loc[row['Class'], ro['Class']] in {'X', ''} or float(table.loc[row['Class'], ro['Class']]) < new_value:
-                        table.at[(row['Class'], ro['Class'])] = new_value
-                
-                    if table.loc[ro['Class'], row['Class']] in {'X', ''} or float(table.loc[ro['Class'], row['Class']]) < new_value:
-                        table.at[(ro['Class'], row['Class'])] = new_value
-
-
-
-    def __compare_lists_and_replace(self, row, table_7_2_4, table, stowage_code, seg_class):   
-        segregation_list = str(row['Stowage and segregation']).split(',')
-        if stowage_code in segregation_list and stowage_code not in [code.strip() for code in segregation_list if code != stowage_code]:
-            result = []
-            replacement_value = table[seg_class].to_list()
-            compare_list_v = table_7_2_4[row['Class']].to_list()
-
-            for i in range(len(compare_list_v)):
-                if replacement_value[i] == 'X' or replacement_value[i] == '*':
-                    result.append(compare_list_v[i])
-                elif compare_list_v[i] == 'X' or compare_list_v[i] == '*':
-                    result.append(replacement_value[i])
-                elif int(replacement_value[i]) > int(compare_list_v[i]) and str(replacement_value[i]).isnumeric() and str(compare_list_v[i]).isnumeric():
-                    result.append(replacement_value[i]) 
-                else:
-                    result.append(compare_list_v[i])
-            table_7_2_4[row['Class']] = result  
-
-            result = [] 
-            compare_list_v = table_7_2_4.loc[row['Class']].to_list()
-            for i in range(len(compare_list_v)):
-                if replacement_value[i] == 'X' or replacement_value[i] == '*':
-                    result.append(compare_list_v[i])
-                elif compare_list_v[i] == 'X' or compare_list_v[i] == '*':
-                    result.append(replacement_value[i])
-                elif int(replacement_value[i]) > int(compare_list_v[i]) and str(replacement_value[i]).isnumeric() and str(compare_list_v[i]).isnumeric():
-                    result.append(replacement_value[i]) 
-                else:
-                    result.append(compare_list_v[i])       
-            table_7_2_4.loc[row['Class']] = result  
-
-    #TODO: check all case scenarios / animal oil category implementation    
-    def __output_adjusted_table_7_2_4(self, table_7_2_4:pd.DataFrame, df_DG_loadlist: pd.DataFrame) -> pd.DataFrame:
-        self.logger.info("Extracting and saving Adjusted IMDG table_7_2_4...")
-        df_DG_classes_expanded = table_7_2_4.copy()
-        df_DG_classes_expanded.columns = df_DG_classes_expanded.columns.astype(float)
-        df_DG_classes_expanded.index = df_DG_classes_expanded.index.astype(float)
-        df_DG_classes_expanded_reference = df_DG_classes_expanded.copy()
-            
-            
-
-        df_temp = df_DG_loadlist
-        df_temp = df_temp[['Serial Number','UN','Class','SubLabel1','Proper Shipping Name (Paragraph B of DOC)','SegregationGroup','Stowage and segregation','FlashPoints', 'Flammable', 'Non-Flammable', 'Stowage Category']]
-        df_temp = df_temp.reset_index()
-        # Change Class & SubLabel  Columns to float type 
-        DG_Loadlist = df_temp.copy()
-        DG_Loadlist[['Class', 'SubLabel1']] = DG_Loadlist[['Class', 'SubLabel1']].apply(lambda x: x.replace('', np.nan))
-        DG_Loadlist = DG_Loadlist.astype({'Class': float, 'SubLabel1': float})
-        
-        # extract the "Stowage and segregation" column as a list of lists
-        sg_list = DG_Loadlist['Stowage and segregation'].tolist()
-
-        # split each string in the list of lists by commas and remove non-SG indexes
-        sg_list = [x.split(',') for x in sg_list if 'SG' in x]
-        sg_list = [[y.strip() for y in x if y.strip().startswith('SG')] for x in sg_list]
-        sg_str = [', '.join(x) for x in sg_list]
-        DG_Loadlist['Stowage and segregation'] = pd.Series(sg_str)
-
-        unique_class_sublabel = DG_Loadlist[['Class', 'SubLabel1']].values.ravel()
-        unique_class_sublabel = pd.Series(unique_class_sublabel).dropna().unique()
-        unique_class_sublabel = [x for x in unique_class_sublabel if x != '']
-            
-        unique_sgg = DG_Loadlist[['SegregationGroup']].values.ravel()
-        new_list = [ss.strip() for s in unique_sgg for ss in s.split(',')]
-        unique_sgg = pd.Series(new_list).dropna().unique()
-        unique_sgg = [x for x in unique_sgg if x != '']
-            
-        for index, row in DG_Loadlist.iterrows():
-                
-            if row['SubLabel1'] in [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]: 
-                    keep_list = df_DG_classes_expanded[row['Class']].to_list()[:6]
-                    self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG1', 1.3)
-                    row_list = df_DG_classes_expanded[row['Class']].to_list()
-                    row_list[:len(keep_list)] = keep_list
-                    df_DG_classes_expanded[row['Class']] = row_list
-
-
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG2', 1.2)
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG3', 1.3)
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG4', 2.1)
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG5', 3.0)
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG6', 5.1)
-                
-            #Stow Away from Class
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG7', 3.0, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG8', 4.1, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG9', 4.3, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG10', 5.1, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG11', 6.2, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG12', 7.0, 1, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG13', 8.0, 1, unique_class_sublabel)
-                #SG14
-            if 'SG14' in str(row['Stowage and segregation']):
-                elements = [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]
-                for e in elements:
-                    if str(e) in unique_class_sublabel:
-                        cols_rows = [float(x) for x in str(e).split('.')]
-                        if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 2:
-                            df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 2
-
-            #SG15 - SG19 --> seperated from class
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG15', 3.0, 2, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG16', 4.1, 2, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG17', 5.1, 2, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG18', 6.2, 2, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG19', 7.0, 2, unique_class_sublabel)
-                
-            #SG20  --> Stow away from SGG1- acids
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG20','SGG1', 1, unique_sgg)
-            #SG21  --> Stow away from SGG18- alkalis
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG21','SGG18', 1, unique_sgg)
-            #SG22  --> Stow away from ammonium salsts --> considered as SGG2- ammonium compounds
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG22','SGG2', 1, unique_sgg)
-            #SG23 --> away from animal & vegetable oils
-            ############
-            #SG24 --. Stow Away from SGG17- azides
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG24','SGG17', 1, unique_sgg)
-            #SG25 --> seperated from goods of class 2.1 and 3
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG25', 2.1, 2, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG25', 3.0, 2, unique_class_sublabel)
-            #SG26 --> seperation category 4 from class 2.1 and 3 (complementary to SG25) when on deck 
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG26', 2.1, 4, unique_class_sublabel)
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG26', 3.0, 4, unique_class_sublabel)
-            #SG27 --> Stow seperated from explosives containing chlorates or perchlorates
-
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['0075', '0160', '0224', '0451', '0465', '0511']):
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG27', 1.1, 1, unique_class_sublabel)
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['0245', '0395', '0466', '0467']):
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG27', 1.2, 1, unique_class_sublabel)
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['0158', '0159', '0161', '0183', '0246', '0335', '0396', '0508']):
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG27', 1.3, 1, unique_class_sublabel)
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['0312', '0454', '0505', '0506', '0507', '0509']):
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG27', 1.4, 1, unique_class_sublabel)
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['0332']):
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG27', 1.5, 1, unique_class_sublabel)
-            #################
-            #SG28 --> Stow seperated form SGG2 - ammonium compoinds and explosives containing amonium compounds or salts 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG28','SGG2', 2, unique_sgg)
-            ## add explosives 
-            #SG29 --> Segregation from foodstuff 
-            ##### --> not in scope
-            #SG30 --> Stow away from SGG7 - heavy metals and their salts 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG30','SGG7', 1, unique_sgg)
-            #SG31 --> Stow away from SGG9 - lead and its compunds 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG31','SGG9', 1, unique_sgg)
-            #SG32 --> Stow away from SGG10 - liquid halogenated hydrcarbons 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG32','SGG10', 1, unique_sgg)
-            #SG33 --> Stow away from SGG15 - powdered metals 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG33','SGG15', 1, unique_sgg)
-            #SG34 -->  when containing ammonium compunds, Stow seperated from SGG4 - Chlorates or SGG13 - perchlrates 
-            if 'SGG2' in str(row['SegregationGroup']): 
-                self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG34','SGG4', 2, unique_sgg)
-                self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG34','SGG13', 2, unique_sgg)
-                ## add Stow seperated from explosives containing chlorates or perchlorates
-            #SG35 -->  Stow seperated from SGG1 - Acids  
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG35','SGG1', 2, unique_sgg)
-            #SG35 -->  Stow seperated from SGG18 - Alkalis  
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG36','SGG18', 2, unique_sgg)
-            #SG37
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1043','2073']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG37', 2.2, 2, unique_class_sublabel)
-                        
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1005', '3318']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG37', 2.3, 2, unique_class_sublabel)
-                        
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['2672']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG37', 8.0, 2, unique_class_sublabel)   
-                
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1841']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG37', 9.0, 2, unique_class_sublabel)
-            #SG38
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG38','SGG2', 2, unique_sgg)
-            #SG39 
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG39','SGG2', 2, unique_sgg)
-            #SG40
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG40','SGG2', 2, unique_sgg)
-            #SG41 --> away from animal & vegetable oils
-            ############
-            #SG42
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG42','SGG2', 3, unique_sgg)
-            #SG43
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['2901']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG43', 2.3, 2, unique_class_sublabel)
-                        
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1745', '1746']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG43', 5.1, 2, unique_class_sublabel)
-                        
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1744']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG43', 8.0, 2, unique_class_sublabel)   
-            #SG44 
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1444']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG44', 5.1, 2, unique_class_sublabel) 
-            #SG45
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG45','SGG4', 2, unique_sgg)
-            #SG46
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['2548', '1749', '1017']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG46', 2.3, 2, unique_class_sublabel)
-                        
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['2995', '2996']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG46', 6.1, 2, unique_class_sublabel)
-            #SG47
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG47','SGG5', 2, unique_sgg)
-            #SG48 
-            #from combustible material
-            #SG49
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG49','SGG6', 2, unique_sgg)
-            #SG50 --> Segregation from foodstuff 
-            ##### --> not in scope
-            #SG51
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG51','SGG8', 2, unique_sgg)
-            #SG52
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1376']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG52', 4.2, 2, unique_class_sublabel)
-            #SG53 --> out of scope
-            #SG54
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG54','SGG11', 2, unique_sgg)
-            #SG55
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG55','SGG11', 2, unique_sgg)
-            #SG56
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG56','SGG12', 2, unique_sgg)
-            #SG57  odour absorbing cargo 
-            #SG58
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG58','SGG13', 2, unique_sgg)
-            #SG59
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG59','SGG14', 2, unique_sgg)
-            #SG60
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG60','SGG16', 2, unique_sgg)
-            #SG61
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG61','SGG15', 2, unique_sgg)
-            #SG62
-            if any(x in list(DG_Loadlist['UN'].unique()) for x in ['1350', '2448']):
-                    self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG62', 4.1, 2, unique_class_sublabel)
-            #SG63 
-            if 'SG63' in str(row['Stowage and segregation']):
-                elements = [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]
-                for e in elements:
-                    if str(e) in unique_class_sublabel:
-                        cols_rows = [float(x) for x in str(e).split('.')]
-                        if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 4:
-                            df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 4
-                
-            #SG65
-            if 'SG65' in str(row['Stowage and segregation']):
-                elements = [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]
-                for e in elements:
-                    if str(e) in unique_class_sublabel:
-                        cols_rows = [float(x) for x in str(e).split('.')]
-                        if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 3:
-                            df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 3
-            #SG67
-            self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG67', 1.4, 2, unique_class_sublabel)
-            if 'SG67' in str(row['Stowage and segregation']):
-                elements = [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]
-                for e in elements:
-                    if str(e) in unique_class_sublabel:
-                        cols_rows = [float(x) for x in str(e).split('.')]
-                        if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 4:
-                            df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 4
-            #SG68
-            if row['FlashPoints'] is not None and float(row['FlashPoints']) < 60.0:
-                self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'S68', 3.0)
-                self.__update_table_7_2_4(row, df_DG_classes_expanded, 'SG68', 4.1, 1, unique_class_sublabel)
-            #SG69
-            if str(row['UN']) == '1950': 
-                if str(row['Stowage Category']) == 'A':
-                    self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 9.0)
-                    elements = [1.1, 1.2, 1.5, 1.3, 1.6, 1.4]
-                    for e in elements:
-                        if str(e) in unique_class_sublabel:
-                            cols_rows = [float(x) for x in str(e).split('.')]
-                            if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 1:
-                                df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 1
-                            
-                if str(row['Stowage Category']) == 'B': 
-                    if row['Flammable'] == 'x': 
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.1)
-                    if row['Non-Flammable'] == 'x' and str(row['SubLabel1']) != '6.1':
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.2)
-                    if str(row['SubLabel1']) == '6.1':
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.3)
-
-                if str(row['Stowage Category']) == 'C': 
-                    if row['Flammable'] == 'x': 
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.1)
-                    if row['Non-Flammable'] == 'x' and str(row['SubLabel1']) != '6.1':
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.2)
-                    if str(row['SubLabel1']) == '6.1':
-                        self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG69', 2.3)
-
-            #SG70
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG70','SGG1', 2, unique_sgg)
-            #SG74
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG74', 1.4)
-            #SG75
-            self.__update_table_7_2_4_sgg(row, DG_Loadlist, df_DG_classes_expanded, 'SG75','SGG1a', 2, unique_sgg)
-            #SG76
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG76', 7.0)
-            #SG77
-            self.__compare_lists_and_replace(row, df_DG_classes_expanded, df_DG_classes_expanded_reference, 'SG77', 8.0)
-            #SG78
-            if 'SG78' in str(row['Stowage and segregation']):
-                elements = [1.1, 1.2, 1.5]
-                for e in elements:
-                    if str(e) in unique_class_sublabel:
-                        cols_rows = [float(x) for x in str(e).split('.')]
-                        if df_DG_classes_expanded.loc[row.Class, cols_rows[0]] == 'X' or df_DG_classes_expanded.loc[row.Class, cols_rows[0]] < 4:
-                            df_DG_classes_expanded.at[(row.Class, cols_rows[0]), (cols_rows[1], row.Class)] = 4
-
-        return df_DG_classes_expanded
+        return l_container_groups_containers_lines
     
     def __output_CPLEX_input_container_csvs(self, df_all_containers: pd.DataFrame, df_filled_slots: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame, d_iso_codes_map: dict) :
-        
-        
         # loading stacks
         stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
         stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
@@ -1203,264 +391,9 @@ class MainLayer():
             d_iso_codes_map
         )
 
-        ## DG LoadList ##
         # load referential data 
         if not self.__reuse_previous_results:
-            d_DG_enrichment_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_enrichment_map.json", self.__s3_bucket_in)
-            
-            imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
-            # imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" 
-            
-            imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str)
-        
-        
-            df_DG_loadlist = self.__output_DG_loadlist(df_all_containers, d_DG_enrichment_map, imdg_codes_df)
 
-            df_DG_classes_expanded_updated = self.__output_adjusted_table_7_2_4( df_DG_classes_expanded, df_DG_loadlist)
-            df_DG_classes_grouped = self.__PL.get_df_DG_classes_grouped(df_DG_loadlist, df_DG_classes_expanded_updated)
-            df_DG_classes_grouped_to_save = self.__PL.get_df_DG_classes_grouped_to_save(df_DG_classes_grouped)
-            df_DG_classes_grouped_to_save_csv_path = f"{self.__py_scripts_out_dir}/table_7_2_4_grouped.csv"
-            self.__DL.write_csv(df_DG_classes_grouped_to_save, df_DG_classes_grouped_to_save_csv_path, self.__s3_bucket_out)
-        
-        
-        #======================================================================================================================================  
-        #DG Exclusions
-        #======================================================================================================================================
-            self.logger.info("Extracting and saving DG LoadList Exclusion Zones...")
-            dg_exclusions_csv_path = f"{self.__vessels_static_in_dir}/DG Exclusions.csv"
-            dg_exclusions_df =  self.__DL.read_csv(dg_exclusions_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
-            dg_exclusions_df.set_index('DG category', inplace=True)
-
-
-            # def get_dg_exclusion_category(self, dg_exclusion_csv_path) -> dict:
-            
-            # return dg_exclusion_by_category       
-        
-
-            # Transforming dg_exclusions_df to dictionary 
-            ### Reading the Exclusions zones depending on the (macro-)category
-            ##### Getting for each (macro-)category the list of exclusion zones
-            dg_exclusions_by_category = {}
-            # Use boolean indexing to filter columns where value is "X" and get the column names
-            indices = dg_exclusions_df.columns[dg_exclusions_df.eq('X').any()].tolist()
-
-            # Create a dictionary where the keys are the row indices and the values are the indices list
-            dg_exclusions_by_category = dict(zip(dg_exclusions_df.index, indices))
-            # iterate over the rows
-            for i, row in dg_exclusions_df.iterrows():
-                # create empty list to hold column indices where value is "X"
-                indices = []
-                # iterate over the columns
-                for j, col in row.items():
-                    # if value is "X", append column index to indices list
-                    if col == 'X':
-                        indices.append(j)
-                # populate index and values in dictionary 
-                    dg_exclusions_by_category[i] = indices 
-
-            #### Using the (macro-)categories defined by the vessel doc
-
-            l_explosion_protect_IIB_T4  = d_DG_enrichment_map["l_explosion_protect_IIB_T4"]
-            l_IMDG_Class_1_S = d_DG_enrichment_map["40-20_Class_1.4S"]
-            #### In addition to the (macro-)categories derived from the compliance doc, we have special exclusions zones linked to stowage categories
-        
-            #### The general exclusion data takes the form:
-            #- bay (differentiating 20' and 40')
-            #- rows (most of the time it will be all rows, storing None, but it can be a list of rows)
-            #- tiers (first part, 0 (hold) or 1 (deck), second part, all tiers inside, storing None if all tiers, but it can be a list of tiers)
-            #- In order to include those in sets, lists of rows and of tiers are stored as frozensets
-                
-            l_macro_bays = [2 + 4 * n for n in range(0, 24)]
-            # list of all bays on deck
-            l_deck_bays = l_macro_bays.copy()
-            l_deck_bays.extend([n-1 for n in l_macro_bays if n not in [74, 94]])
-            l_deck_bays.extend([n+1 for n in l_macro_bays if n not in [74, 94]])
-            l_deck_bays.sort()
-            # list of all bays in hold
-            l_hold_bays = [n for n in l_macro_bays if n not in [74, 94]]
-            l_hold_bays.extend([n-1 for n in l_macro_bays if n not in [74, 94]])
-            l_hold_bays.extend([n+1 for n in l_macro_bays if n not in [74, 94]])
-            l_hold_bays.sort()
-
-            # list of all zones under the deck, those zones are forbidden for stowage categories C and D
-            l_hold_zones = ["%03d0" % n for n in l_hold_bays]
-
-            l_sw_1 = [
-                ('034', None, ('0', frozenset({'02', '04', '06', '08', '10', '12', '14', '16'}))),
-                ('035', None, ('0', frozenset({'02', '04', '06', '08', '10', '12', '14', '16'}))),
-                ('037', None, ('0', frozenset({'02', '04', '06', '08', '10', '12', '14', '16'}))),
-                ('038', None, ('0', frozenset({'02', '04', '06', '08', '10', '12', '14', '16'}))),
-                ('077', frozenset({'08', '09', '10', '11', '12', '13', '14', '15', '16'}), ('0', frozenset({'10'}))),
-                ('078', frozenset({'08', '09', '10', '11', '12', '13', '14', '15', '16'}), ('0', frozenset({'10'}))),
-                ('079', frozenset({'08', '09', '10', '11', '12', '13', '14', '15', '16'}), ('0', frozenset({'10'})))
-            ]
-
-            # SW2, forbid a simple list
-            l_sw_2 = ['0341', '0351', '0371', '0381']
-
-            # polmar,
-            # exclude all positions for bays 1, 2, 94 on the dock
-            l_polmar = ['0011', '0021', '0941']
-            # for other bays, from 3 to 91, only external rows
-            l_decks_polmar_extension = ["%03d" % n for n in l_deck_bays if n not in [1,2,94]]
-            # bay 3 is a special case, external rows are 17 and 18 instead of 19 and 20
-            # and it is the first in the list from 3 to 91
-            l_rows_polmar_extension = [frozenset({'17', '18'})]
-            # all other bays
-            l_rows_polmar_extension.extend([frozenset({'19', '20'}) for n in l_deck_bays if n not in [1,2,3,94]])
-                                        
-            l_polmar.extend([(x[0], x[1], ('1', None)) for x in zip(l_decks_polmar_extension, l_rows_polmar_extension)])
-
-            ### Creating a dictionnary for each container x loading port, containing the set of excluded zones
-                
-            ##### Depending on creating for master planning, only doc, and only at bay level, or for slot planning, with all exclusions
-            #- Master = Simple rules (by bay) = Compliance Doc + Simple DG rules
-            #- Slot = Complex rules (by row and tier) = Complex DG Rules
-
-            d_containers_exclusions = {}  
-            f_dg_loadlist = df_DG_loadlist.copy()
-            f_dg_loadlist.fillna("",inplace=True)
-            f_dg_loadlist = f_dg_loadlist.reset_index()
-            for idx, row in f_dg_loadlist.iterrows():
-        
-                # getting columns of interest
-                container_id = f_dg_loadlist['Serial Number'].iloc[idx]
-                pol = f_dg_loadlist['POL'].iloc[idx]
-                pod = f_dg_loadlist['POD'].iloc[idx]
-                # adapt pol to SOU2 if needed
-                
-                s_closed_freight_container = f_dg_loadlist['Closed Freight Container'].iloc[idx]
-                un_no = f_dg_loadlist['UN'].iloc[idx]
-                imdg_class = f_dg_loadlist['Class'].iloc[idx]
-                sub_label = f_dg_loadlist['SubLabel1'].iloc[idx]
-                dg_remark = f_dg_loadlist['DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)'].iloc[idx]
-                s_flash_point = f_dg_loadlist['FlashPoints'].iloc[idx]
-                s_polmar = f_dg_loadlist['Marine Pollutant'].iloc[idx]
-                pgr = f_dg_loadlist['PGr'].iloc[idx]
-                s_liquid = f_dg_loadlist['Liquid'].iloc[idx]
-                s_solid = f_dg_loadlist['Solid'].iloc[idx]
-                s_flammable = f_dg_loadlist['Flammable'].iloc[idx]
-                s_non_flammable = f_dg_loadlist['Non-Flammable'].iloc[idx]
-                shipping_name = f_dg_loadlist['Proper Shipping Name (Paragraph B of DOC)'].iloc[idx]
-                s_stowage_segregation = f_dg_loadlist['Stowage and segregation'].iloc[idx]
-                s_package_goods = f_dg_loadlist['Package Goods'].iloc[idx]
-                stowage_category = f_dg_loadlist['Stowage Category'].iloc[idx]
-                
-                # container identification
-                if (container_id, pol) not in d_containers_exclusions:
-                    d_containers_exclusions[(container_id, pol)] = set()
-                
-                # getting the corresponding macro-category
-                
-                # transforming and combining some items
-                
-                # for remark a), dg_remark could have been used as well
-                as_closed = True
-                # but maybe useless
-                #if s_stowage_segregation.find("SW5") >= 0 and s_closed_freight_container != 'x':
-                if s_closed_freight_container != 'x':
-                    as_closed = False
-                
-                # for remark b)
-                # ...
-                
-                liquid = True if s_liquid == 'x' else False
-                solid = True if s_solid == 'x' else False
-                if solid == False and liquid == False: solid = True
-                flammable = True if s_flammable == 'x' else False
-                polmar = True if s_polmar == 'yes' else False
-                sw_1 = True if "SW1" in str(s_stowage_segregation) else False
-                sw_2 = True if "SW2" in str(s_stowage_segregation) else False
-                
-                flash_point = None
-                if len(str(s_flash_point)) > 0:
-                    s_flash_point = s_flash_point
-                    flash_point = float(s_flash_point)
-
-                if imdg_class == '3' and len(str(s_flash_point)) == 0: 
-                    flash_point = float(23) 
-            
-                
-                
-                category = self.__get_DG_category(un_no, imdg_class, sub_label,
-                                        as_closed, liquid, solid, flammable, flash_point,l_explosion_protect_IIB_T4, l_IMDG_Class_1_S)
-                # print(container_id, pol, category)
-                # if category == '?':h
-                #    print("un_no, imdg, sub_label, as_closed, liquid, solid, flammable, flash_point")
-                #    print(un_no, imdg_class, sub_label,
-                #          as_closed, liquid, solid, flammable, flash_point,dg_remark,pgr,shipping_name, stowage_category, s_stowage_segregation)
-                
-                # and use the macro-category to expand the set of forbidden zones
-
-                d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)], 
-                                                                                dg_exclusions_by_category[category])
-            
-                # plus, if necessary, the stowage conditions (no C or D on hold, whatever the circumstances)
-                # and SW1, SW2 and polmar
-                # depending on if for slot planning or not
-                
-                if stowage_category in ['C', 'D']:
-                    d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)],
-                                                                                    l_hold_zones)
-                if sw_2 == True:
-                    d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)],
-                                                                                    l_sw_2)
-                
-                if self.__DG_Rules == "slot":       
-                    if sw_1 == True:
-                        d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)],
-                                                                                        l_sw_1)     
-                    if polmar == True:
-                        d_containers_exclusions[(container_id, pol)] = self.__expand_exclusion(d_containers_exclusions[(container_id, pol)],
-                                                                                        l_polmar)
-            f_loadlist_exclusions_list = []
-            if self.__DG_Rules == "master":
-                header_list = ["ContId", "LoadPort", "Bay", "MacroTier"]
-
-                # ordinary rows
-                for ((container_id, pol), s_exclusions) in d_containers_exclusions.items():
-                    for (bay, l_rows, (macro_tier, l_tiers)) in s_exclusions:
-                        row = []
-                        row.extend([container_id, pol, bay[1:3], macro_tier])
-                        f_loadlist_exclusions_list.append(row)
-                    
-            if self.__DG_Rules == "slot":
-                # header
-                header_list = ["ContId", "LoadPort", "Bay", "Row", "MacroTier", "Tier"]
-
-                # ordinary rows
-                for ((container_id, pol), s_exclusions) in d_containers_exclusions.items():
-                    for (bay, l_rows, (macro_tier, l_tiers)) in s_exclusions:
-
-                        if l_rows is None:
-                            if l_tiers is None:
-                                f_loadlist_exclusions_list.append([container_id, pol, bay[1:3], "", macro_tier,""])
-                                
-                            else:
-                                for tier in l_tiers:
-                                    f_loadlist_exclusions_list.append([container_id, pol, bay[1:3], "", macro_tier, tier])
-                
-                        else:
-                            for row in l_rows:
-                                if l_tiers is None:
-                                
-                                    f_loadlist_exclusions_list.append([container_id, pol, bay[1:3], row, macro_tier,""])
-                        
-                                else:
-                                    for tier in l_tiers:
-                                    
-                                        f_loadlist_exclusions_list.append([container_id, pol, bay[1:3], row, macro_tier, tier])
-                        
-                                        
-                    
-
-            f_loadlist_exclusions = pd.DataFrame(f_loadlist_exclusions_list, columns= header_list)
-
-            DG_csv_name =  "DG Loadlist Exclusions.csv"
-            DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
-            self.__DL.write_csv(f_loadlist_exclusions, DG_csv_path, self.__s3_bucket_out)
-
-        
             # d_STOWING_seq_num_to_port_name: this map is only for stowing info
             d_STOWING_seq_num_to_port_name = self.__ML.get_d_STOWING_seq_num_to_port_name(df_onboard_loadlist)
             self.__PL.add_STOWING_maps_to_class_attributes(d_STOWING_seq_num_to_port_name)
@@ -1470,146 +403,9 @@ class MainLayer():
 
             ## Grouped containers ##
             self.logger.info("Extracting and saving Container Groups Containers...")
-            self.__output_grouped_containers(l_stacks_lines, l_stowing_info_lines, l_onboard_loadlist_lines)
+            l_container_groups_containers_lines = self.__output_grouped_containers(l_stacks_lines, l_stowing_info_lines, l_onboard_loadlist_lines)
 
-        #======================================================================================================================================
-            
-            groups_containers_csv_name = "Container Groups Containers.csv"
-            groups_containers_csv_path = f"{self.__py_scripts_out_dir}/{groups_containers_csv_name}"
-            f_containers = self.__DL.read_csv(groups_containers_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_out).astype(str)
-
-            stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
-            stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
-            l_stacks_lines = self.__DL.read_csv_lines(stacks_csv_path, s3_bucket=self.__s3_bucket_in, new_line="\n")
-            fn_stacks = self.__PL.get_list_of_lines_as_df(l_stacks_lines)
-            
-            # Preliminaries : get for each bay x macro-tier combination the set of relevant subbays
-
-            d_stacks = self.__get_stacks_capacities(fn_stacks)
-            d_bay_macro_tier_l_subbays = self.__get_bays_macro_tiers_l_subbays(d_stacks)
-
-            # Reading the exclusions by containers and their membership in CG
-
-            # Create exclusion zones by container groups
-
-            #### The individual container is a couple (container, POL) :
-            # - we first get their container group in the container group file
-            # - we get the individual exclusion area (bay x macro-tier) 
-            # in the containers exclusion zones file (with a parameter set to 'master', not 'slot')
-            # - the unions of those indivicual areas create a set of exclusion zones, 
-            # - for each container group, we list the relevant exclusion zones
-
-            # get container group for each container
-            d_container_2_container_group = {}
-
-            for idx, row in f_containers.iterrows():
-                container = f_containers["Container"].iloc[idx]
-                load_port_name = f_containers["LoadPort"].iloc[idx]
-                disch_port_name = f_containers["DischPort"].iloc[idx]
-                size = f_containers["Size"].iloc[idx]
-                c_type = f_containers["cType"].iloc[idx]
-                c_weight = f_containers["cWeight"].iloc[idx]
-                height = f_containers["Height"].iloc[idx]
-                cg = (load_port_name, disch_port_name, size, c_type, c_weight, height)
-                d_container_2_container_group[(container, load_port_name)] = cg
-
-            # get exclusion zones (set of areas) for each container
-            d_container_2_exclusion_zone = {}
-
-            for idx, row in f_loadlist_exclusions.iterrows():
-                container = f_loadlist_exclusions["ContId"].iloc[idx]
-                load_port_name = f_loadlist_exclusions["LoadPort"].iloc[idx]
-                bay = f_loadlist_exclusions["Bay"].iloc[idx]
-                macro_tier = f_loadlist_exclusions["MacroTier"].iloc[idx]
-                # beware, in that file, some GBSOU refer to GBSOU2 !! (handled)
-            #     if load_port_name == 'GBSOU' and (container, load_port_name) not in d_container_2_container_group:
-            #         load_port_name = 'GBSOU2'
-                # normal process
-                if (container, load_port_name) not in d_container_2_exclusion_zone:
-                    d_container_2_exclusion_zone[(container, load_port_name)] = set()
-                d_container_2_exclusion_zone[(container, load_port_name)].add((bay, macro_tier))
-
-            # get set of zones as such, all container groups considered together
-            s_zones = set()
-            for (container, load_port_name), zone in d_container_2_exclusion_zone.items():
-                s_zones.add(frozenset(zone))
-            l_zones = list(s_zones)
-
-            # get for each container the exclusion zone index in that list
-            d_container_2_ix_exclusion_zone = {}
-            for (container, load_port_name), container_zone in d_container_2_exclusion_zone.items():
-                ix_zone = -1
-                for ix, zone in enumerate(l_zones):
-                    if zone == container_zone:
-                        ix_zone = ix
-                        break
-                d_container_2_ix_exclusion_zone[(container, load_port_name)] = ix_zone
-                
-                
-            # now, list exclusion zones for each container group, and count corresponding containers 
-            d_cg_2_ix_exclusion_zones = {}
-
-            for (container, load_port_name), ix_zone in d_container_2_ix_exclusion_zone.items():
-            #     # contrôle de cohérence
-            #     if (container, load_port_name) not in d_container_2_container_group:
-            #         print((container, load_port_name))
-
-                cg = d_container_2_container_group[(container, load_port_name)]
-                if cg not in d_cg_2_ix_exclusion_zones:
-                    d_cg_2_ix_exclusion_zones[cg] = {}
-                if ix_zone not in d_cg_2_ix_exclusion_zones[cg]:
-                    d_cg_2_ix_exclusion_zones[cg][ix_zone] = 0
-                d_cg_2_ix_exclusion_zones[cg][ix_zone] += 1     
-
-            # creation of the list of exclusion zones (including combinations) for each container group
-            d_cg_2_combi_zones = {}
-            for cg, d_ix_zones in d_cg_2_ix_exclusion_zones.items():
-                d_combi_zones = self.__list_areas_for_zone_intersections(d_ix_zones, l_zones)
-                d_cg_2_combi_zones[cg] = d_combi_zones
-
-            # at last, split bay x macro_tier area into subbays, while keeping the nb of containers data
-            d_cg_combi_subbays = {}
-
-            for cg, d_combi_zones in d_cg_2_combi_zones.items():
-                d_combi_subbays = {}
-                for s_combi_area, nb_containers in d_combi_zones.items():
-                    s_combi_subbays = self.__get_zone_list_subbays(s_combi_area, d_bay_macro_tier_l_subbays)
-                    d_combi_subbays[frozenset(s_combi_subbays)] = nb_containers
-                d_cg_combi_subbays[cg] = d_combi_subbays               
-
-            l_cg_exclusion_zones = []
-            s_header_zones_list = ["LoadPort", "DischPort", "Size", "cType", "cWeight", "Height", "idZone", "Subbay"]
-
-            l_cg_exclusion_zones_nb_dg = []
-            s_header_nb_dg_list = ["LoadPort", "DischPort", "Size", "cType", "cWeight", "Height", "idZone", "NbDG"]
-
-            for (load_port_name, disch_port_name, size, c_type, c_weight, height), d_combi_subbays in d_cg_combi_subbays.items():
-                
-                for ix, (s_combi_subbays, nb_containers) in enumerate(d_combi_subbays.items()):
-                    l_combi_subbays = list(s_combi_subbays)
-                    l_combi_subbays.sort()
-                    # writing zones
-                    for subbay in l_combi_subbays:
-                        row = []
-                        row.extend([load_port_name, disch_port_name, size, c_type, c_weight, height, ix, subbay])
-                        l_cg_exclusion_zones.append(row)
-
-                    # writing nb of containers
-                    row_nb = []
-                    row_nb.extend([load_port_name, disch_port_name, size, c_type, c_weight, height, ix, nb_containers])
-                    l_cg_exclusion_zones_nb_dg.append(row_nb)
-
-            f_cg_exclusion_zones = pd.DataFrame(l_cg_exclusion_zones, columns=s_header_zones_list)
-            f_cg_exclusion_zones_nb_dg = pd.DataFrame(l_cg_exclusion_zones_nb_dg, columns=s_header_nb_dg_list)
-
-            f_cg_exclusion_zones_name =  "DG Container Groups Exclusion Zones.csv"
-            f_cg_exclusion_zones_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_name}"
-            self.__DL.write_csv(f_cg_exclusion_zones, f_cg_exclusion_zones_csv_path, self.__s3_bucket_out)
-
-            f_cg_exclusion_zones_nb_dg_name =  "DG Container Groups Exclusion Zones Nb DG.csv"
-            f_cg_exclusion_zones_nb_dg_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_nb_dg_name}"
-            self.__DL.write_csv(f_cg_exclusion_zones_nb_dg, f_cg_exclusion_zones_nb_dg_csv_path, self.__s3_bucket_out)
-        return (df_DG_loadlist, f_loadlist_exclusions) if not self.__reuse_previous_results else None
+        return l_container_groups_containers_lines if not self.__reuse_previous_results else None
         #======================================================================================================================================       
         ## Stowing and overstowing ##
     def __get_df_from_baplie_and_return_types(self, baplie_path: str, call_id: str, file_type: str, d_csv_cols_to_segments_map: dict, d_main_to_sub_segments_map: dict, s3_bucket:str):
@@ -1932,7 +728,7 @@ class MainLayer():
         self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")
         lashing_parameters_dict = extract_as_dict(rotation_intermediate, indexes=None, columns=['CallFolderName', 'StdSpeed', 'Gmdeck', 'MaxDraft', 'worldwide', 'service', 'WindowStartTime', 'WindowEndTime'])
         self.__AL.validate_data(lashing_parameters_dict)
-        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
+        self.__AL.check_if_errors()
         self.logger.info("*"*80)
         
         # # Intialize worst cast files generation 
@@ -1958,7 +754,7 @@ class MainLayer():
                                 loadlist_flag = 1
                 self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
                 
-            self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
+            self.__AL.check_if_errors()
         else: 
             self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
         self.logger.info("*" * 80)    
@@ -1971,10 +767,21 @@ class MainLayer():
         # DG_rules config JSON for Vessel
         DG_rules = self.__DL.read_json(f"{self.__vessels_static_in_dir}/DG_rules.json", s3_bucket=self.__s3_bucket_in)
         
+        # DG Exclusions 
+        dg_exclusions_csv_path = f"{self.__vessels_static_in_dir}/DG Exclusions.csv"
+        dg_exclusions_df =  self.__DL.read_csv(dg_exclusions_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+        
+        # Vessel Stacks 
+        stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
+        stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
+        l_stacks_lines = self.__DL.read_csv_lines(stacks_csv_path, s3_bucket=self.__s3_bucket_in, new_line="\n")
+        fn_stacks = self.__PL.get_list_of_lines_as_df(l_stacks_lines)
+        
         std_speed = float(lashing_parameters_dict[0]['StdSpeed'])
         draft = float(lashing_parameters_dict[0]['MaxDraft'])
         gm_deck = float(lashing_parameters_dict[0]['Gmdeck'])
-        vessel = Vessel(self.logger, std_speed, gm_deck, draft, vessel_profile, DG_rules)
+        
+        vessel = Vessel(self.logger, std_speed, gm_deck, draft, vessel_profile, DG_rules, dg_exclusions_df, fn_stacks)
         
         #Iniatlize Lashing 
         lashing_conditions = lashing_parameters_dict[0]['worldwide']
@@ -1984,10 +791,18 @@ class MainLayer():
         # empty lists for dataframes that are going to be saved as csvs and their folder names (used in the names of the csvs)
         l_dfs_containers, l_containers_folder_names, l_dfs_rotation_containers = [], [], []
         l_dfs_tanks, l_tanks_baplies_paths, l_tanks_folder_names = [], [], []
-        for baplie_path in self.__l_baplies_filepaths:
+        
+        l_baplies_filepaths = []
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+            baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+            for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                    if file_name.split(".")[-1] == "edi":
+                        file_name_path = f"{baplies_dir}/{file_name}"
+                        l_baplies_filepaths.append(file_name_path)     
+
+        for baplie_path in l_baplies_filepaths:
             folder_name = self.__DL.get_folder_name_from_path(baplie_path)
             file_name = self.__DL.get_file_name_from_path(baplie_path)
-
             folder_name_split = folder_name.split("_")
             call_id = "_".join(folder_name_split[-2:])
             file_type = file_name.split(".")[0]
@@ -2071,8 +886,6 @@ class MainLayer():
                             l_cols.append(col)
 
                     df_attributes.columns = l_cols
-                    # path_name = "output_" + call_id +".csv"
-                    # df_attributes.to_csv(path_name)
                     list_vals = ['DGS_REGULATIONS_CODE_1','DGS_HAZARD_ID_1','DGS_ADDITIONAL_HAZARD_CLASS_ID_1','DGS_HAZARD_CODE_VERSION_ID_1','DGS_UNDG_ID_1',
                      'DGS_SHIPMENT_FLASHPOINT_DEGREE_1','DGS_MEASUREMENT_UNIT_CODE_1','DGS_PACKAGING_DANGER_LEVEL_CODE_1','DGS_EMS_CODE_1','DGS_HAZARD_MFAG_ID_1',
                      'DGS_DGS_PRIM_LABEL1_1','DGS_DGS_SUB_LABEL1_1','DGS_DGS_SUB_LABEL2_1','DGS_DGS_SUB_LABEL3_1','DGS_ATT_PSN_FUNCTION_CODE_QUALIFIER_1',
@@ -2091,11 +904,6 @@ class MainLayer():
                     df_attributes = self.__add_lowest_DGS_cols_to_df(df_attributes, d_csv_cols_to_segments_map)
                     
                     df_rotation = df_attributes[['EQD_ID', 'LOC_9_LOCATION_ID', 'LOC_11_LOCATION_ID']]
-
-    
-                    #NOTE consider these 2 lines
-                    # l_non_empty_cols = [ col for col in df_all_containers.columns if sum(df_all_containers[col].astype(bool)) ]
-                    # df_all_containers = df_all_containers[l_non_empty_cols]
 
                     ## END OF SECTION ##
 
@@ -2116,7 +924,7 @@ class MainLayer():
 
             else: continue
             
-        self.__AL.check_if_errors(self.__error_log_path, self.__s3_bucket_out)
+        self.__AL.check_if_errors()
         
         self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
@@ -2145,8 +953,6 @@ class MainLayer():
         lashing_csv_path = f"{self.__py_scripts_out_dir}/{lashing_csv_name}"
         self.__DL.write_csv(lashing_df, lashing_csv_path, s3_bucket=self.__s3_bucket_out)
         
-
-        
         for i, df in enumerate(l_dfs_tanks):
             port_tanks_csv_name = f"{l_tanks_folder_names[i]}_tank.csv"
             port_tanks_csv_path = f"{self.__py_scripts_out_dir}/{port_tanks_csv_name}"
@@ -2157,22 +963,46 @@ class MainLayer():
         df_all_containers = pd.concat(l_dfs_containers, axis=0, ignore_index=True)
         df_all_containers.fillna("", inplace=True)
         self.__DL.write_csv(df_all_containers, self.__all_containers_csv_path, s3_bucket=self.__s3_bucket_out)
-        
-        
-        
-      
-        
+
         df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
-        # start here
-        # d_DG_enrichment_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_enrichment_map.json", self.__s3_bucket_in)
-        # imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
-        # imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str) 
-        # naming_schema = d_DG_enrichment_map["DG_LOADLIST_SCHEMA"] 
-        # dg_instance = DG(self.logger, vessel, df_all_containers, d_DG_enrichment_map, DG_rules, imdg_codes_df)
-        # df = dg_instance.output_DG_loadlist()
-        # df.to_csv("output.csv")
+        imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
+        imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str) 
+        d_DG_loadlist_config = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_config.json", self.__s3_bucket_in)
         
-        df_DG_loadlist, df_loadlist_exclusions= self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
+        dg_instance = DG(self.logger, vessel, d_DG_loadlist_config, imdg_codes_df, self.__DG_Rules)
+        
+        self.logger.info("Extracting and saving DG LoadList...")
+        df_DG_loadlist = dg_instance.get_df_dg_loadlist(df_all_containers)
+        DG_csv_name =  "DG Loadlist.csv"
+        DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
+        self.__DL.write_csv(df_DG_loadlist, DG_csv_path, self.__s3_bucket_out)
+
+        self.logger.info("Extracting and saving DG LoadList Exclusion...")
+        df_loadlist_exclusions = dg_instance.get_dg_exclusions(df_DG_loadlist)
+        DG_csv_name =  "DG Loadlist Exclusions.csv"
+        DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
+        self.__DL.write_csv(df_loadlist_exclusions, DG_csv_path, self.__s3_bucket_out)
+        
+    
+        df_DG_classes_expanded_updated = dg_instance.output_adjusted_table_7_2_4(df_DG_classes_expanded, df_DG_loadlist)
+        df_DG_classes_grouped = self.__PL.get_df_DG_classes_grouped(df_DG_loadlist, df_DG_classes_expanded_updated)
+        df_DG_classes_grouped_to_save = self.__PL.get_df_DG_classes_grouped_to_save(df_DG_classes_grouped)
+        df_DG_classes_grouped_to_save_csv_path = f"{self.__py_scripts_out_dir}/table_7_2_4_grouped.csv"
+        self.__DL.write_csv(df_DG_classes_grouped_to_save, df_DG_classes_grouped_to_save_csv_path, self.__s3_bucket_out)
+        
+        l_container_groups_containers_lines = self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
+        self.logger.info("Extracting and saving DG LoadList Exclusion Zones & Nb DG ...")
+        df_grouped_containers = self.__PL.get_list_of_lines_as_df(l_container_groups_containers_lines)
+        df_cg_exclusion_zones, df_cg_exclusion_zones_nb_dg = dg_instance.get_exclusion_zones(df_grouped_containers, df_loadlist_exclusions)
+
+        f_cg_exclusion_zones_name =  "DG Container Groups Exclusion Zones.csv"
+        f_cg_exclusion_zones_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_name}"
+        self.__DL.write_csv(df_cg_exclusion_zones, f_cg_exclusion_zones_csv_path, self.__s3_bucket_out)
+
+        f_cg_exclusion_zones_nb_dg_name =  "DG Container Groups Exclusion Zones Nb DG.csv"
+        f_cg_exclusion_zones_nb_dg_csv_path = f"{self.__py_scripts_out_dir}/{f_cg_exclusion_zones_nb_dg_name}"
+        self.__DL.write_csv(df_cg_exclusion_zones_nb_dg, f_cg_exclusion_zones_nb_dg_csv_path, self.__s3_bucket_out)
+
         if len(l_dfs_tanks):                    
             df_tanks_final = pd.concat(l_dfs_tanks, axis=0, ignore_index=True)
             df_tanks_final.fillna("", inplace=True)
@@ -2205,7 +1035,6 @@ class MainLayer():
         self.logger.info("Preprocessing first Execution: Done...")
         self.logger.info("*"*80)
 
-        
     def __get_CPLEX_output(self) -> 'tuple[pd.DataFrame, dict, dict]':
         df_cplex_out = self.__DL.read_csv(f"{self.__cplex_out_dir}/output.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
         df_cplex_out = self.__PL.process_slots(df_cplex_out, "SLOT_POSITION", True)
@@ -2428,12 +1257,11 @@ class MainLayer():
         l_all_semgents = header_segments_list + containers_data_list + tail_segments_list
         path_to_save = f"{self.__cplex_out_dir}/Bayplan.edi"
         self.__DL.output_bayplan_edi(path_to_save, baplie_delimiter, l_all_semgents, self.__s3_bucket_out)
-        
 
     def __run_reexecution(self) -> None:
         
         files_in_output = self.__DL.list_files_in_path(self.__cplex_out_dir, self.__s3_bucket_out)
-        self.__AL.check_if_no_output_postprocess(files_in_output, self.__error_log_path, self.__s3_bucket_out)
+        self.__AL.check_if_no_output_postprocess(files_in_output)
         
         df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output()
             
@@ -2443,16 +1271,12 @@ class MainLayer():
             # self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
 
         self.__output_bayplan(df_cplex_out, d_cplex_containers_slot_by_id)
-        
-      
+
     def run_main(self) -> None:
         if not self.__reuse_previous_results:
             self.logger.info("Run first execution")
             self.__run_first_execution()
-            
-        
-        
+
         else:
             self.logger.info("Run reexecution")
             self.__run_reexecution()
-            

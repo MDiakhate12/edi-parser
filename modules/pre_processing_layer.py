@@ -92,28 +92,6 @@ class PreProcessingLayer():
         return df
     #endregion DATA TYPES PROCESSING
 
-    #region ROTATION CSV
-
-    # def enrich_d_port_num_moves(self, port_name: str, d_port_name_seq_map: dict, d_port_num_moves: dict, df_port_containers: pd.DataFrame) -> dict:
-    #     port_name_num = d_port_name_seq_map[port_name]
-
-    #     if port_name_num != 1:
-    #          # add number of containers in loadlist edi of port_name
-    #         d_port_num_moves[port_name] += len(df_port_containers)
-    #     # print(port_name)
-    #     # print(port_name, ":", d_port_num_moves[port_name])
-        
-    #     for port in d_port_num_moves.keys():
-    #         # if port is one of the a next ports (after port_name) => add number of containers in port_name having the POL as port
-    #         if d_port_name_seq_map[port] > port_name_num: 
-    #             d_port_num_moves[port] += len(df_port_containers[df_port_containers["LOC_11_LOCATION_ID"].str.contains(port)]) #  if port not in LOC_11_LOCATION_ID col, the result of len is 0            
-    #             # print(port, ":", d_port_num_moves[port])
-
-    #     # print("*"*100)
-        
-    
-
-    #endregion ROTATION CSV
 
     #region CONTAINERS ONBOARD LOADLIST
 
@@ -289,16 +267,9 @@ class PreProcessingLayer():
 
         if not len(str_lowest_DG_class_col_suffix):
             str_lowest_DG_class_col_suffix = "_1"
-        #print(str_all_DG_classes_col_suffixes)
-        # # lowest class
-        # DGS_row_min = min(l_DGS_row_vals) if len(l_DGS_row_vals) else ""
-        # DGS_row_min_idx = l_row.index(DGS_row_min)
-        # DGS_col_split_with_row_min_idx = l_DGS_HAZARD_ID_cols[DGS_row_min_idx].split("_")
-        # DGS_id_num = DGS_col_split_with_row_min_idx[1]
-        # DGS_id_num_prefix = "_".join([DGS_col_split_with_row_min_idx[0], DGS_id_num, ""])
-
         return str_lowest_DG_class_col_suffix, str_all_DG_classes_col_suffixes
 ## LOWEST exists implied _ OLD 
+
     def __get_df_DG_classes_filtered(self, df_DG_LoadList: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
         l_DG_classes = df_DG_LoadList[['Class', 'SubLabel1']].values.ravel()
         l_DG_classes = list(pd.Series(l_DG_classes).dropna().unique())
@@ -315,24 +286,25 @@ class PreProcessingLayer():
         df_DG_classes_filtered.columns = DG_columns
 
         df_DG_classes_filtered.replace(["*", "X"], "", inplace=True)
-
+        
         return df_DG_classes_filtered
 
-
-    #NOTE ask about filtering the DG classes from table
     def get_df_DG_classes_grouped(self, df_DG_LoadList: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
         df_DG_classes_filtered = self.__get_df_DG_classes_filtered(df_DG_LoadList, df_DG_classes_expanded)
+        df_DG_classes_filtered = df_DG_classes_filtered.astype(str)
+        
         d_rows_as_dicts = df_DG_classes_filtered.to_dict(orient="dict")
         l_d_rows = []
         l_rows_keys = []
         for k in d_rows_as_dicts.keys():
             d_row = d_rows_as_dicts[k]
- 
+
             if d_row not in l_d_rows:
                 l_d_rows.append(d_row)
                 l_rows_keys.append(k)
 
             else:
+
                 d_row_idx_in_list = l_d_rows.index(d_row)
                 old_k = l_rows_keys[d_row_idx_in_list]
                 new_k = f"{old_k},{k}"
@@ -341,11 +313,10 @@ class PreProcessingLayer():
         d_rows_as_dicts_grouped = {}
         for k, row in list(zip(l_rows_keys, l_d_rows)):
             d_rows_as_dicts_grouped[k] = row
-
         df_grouped = pd.DataFrame(d_rows_as_dicts_grouped)
         df_grouped.drop_duplicates(inplace=True)
-        df_grouped.index = df_grouped.columns
 
+        df_grouped.index = df_grouped.columns
         return df_grouped
 
     def get_df_DG_classes_grouped_to_save(self, df_grouped: pd.DataFrame) -> pd.DataFrame:
@@ -390,158 +361,6 @@ class PreProcessingLayer():
         return df_onboard_loadlist
 
     #endregion CONTAINERS ONBOARD LOADLIST
-    
-    #region DG LOADLIST
-
-    def __populate_states_list(self, states_list_to_map: list, reference_state: str, yes_no_vals_tuple: tuple) -> None:
-        states_list_to_populate = []
-        for states in states_list_to_map:
-            if states == "" or states != states:
-                states_list_to_populate.append(yes_no_vals_tuple[1])
-                continue
-            
-            if any(reference_state == state for state in states):
-                states_list_to_populate.append(yes_no_vals_tuple[0])
-            else:
-                states_list_to_populate.append(yes_no_vals_tuple[1])
-
-        return states_list_to_populate
-
-    def __get_DG_ATT_states_lists(self, attributes_df: pd.DataFrame) -> 'tuple[list, list, list, list, list]':
-        #TODO revisit func
-        ATT_HAZ_cols = []
-        ATT_AGR_col = ""
-        for col in attributes_df.columns:
-            if "DETAIL_DESCRIPTION_CODE_" in col:
-                if "DGS_ATT_HAZ" in col:
-                    ATT_HAZ_cols.append(col)
-            
-                elif "DGS_ATT_AGR" in col:
-                    ATT_AGR_col = col
-
-    
-        if len(ATT_HAZ_cols):
-            ATT_HAZ_states_lists = [ attributes_df[ATT_HAZ_cols[i]].tolist() for i in range(len(ATT_HAZ_cols)) ]
-        else:
-            ATT_HAZ_states_lists = [ [("") for idx in attributes_df.index] ]
-        
-        if len(ATT_AGR_col):
-            ATT_AGR_states_list = [ (val) for val in attributes_df[ATT_AGR_col].tolist() ]
-        else:
-            ATT_AGR_states_list = [ ("") for idx in attributes_df.index ]
-
-        ATT_HAZ_states_lists_len = len(ATT_HAZ_states_lists)
-        if ATT_HAZ_states_lists_len == 2:
-            ATT_HAZ_cols_states = [ (state_one, state_two) for (state_one, state_two) in list(zip(ATT_HAZ_states_lists[0], ATT_HAZ_states_lists[1])) ]
-        else:
-            ATT_HAZ_cols_states = [ (state) for state in ATT_HAZ_states_lists[0] ]
-
-        marine_pollutant_list = self.__populate_states_list(ATT_HAZ_cols_states, "P", ("yes", "no")) # polmar
-        flammable_list = self.__populate_states_list(ATT_HAZ_cols_states, "FLVAP", ("x", ""))
-        liquid_list = self.__populate_states_list(ATT_AGR_states_list, "L", ("x", ""))
-        solid_list = self.__populate_states_list(ATT_AGR_states_list, "S", ("x", ""))
-
-        return marine_pollutant_list, flammable_list, liquid_list, solid_list
-
-    def __add_DG_ATT_states_to_df(self, df: pd.DataFrame, attributes_df: pd.DataFrame) -> pd.DataFrame:
-        marine_pollutant_list, flammable_list, liquid_list, solid_list = self.__get_DG_ATT_states_lists(attributes_df)
-        df["Marine Pollutant"] = marine_pollutant_list
-        df["Liquid"] = liquid_list
-        df["Solid"] = solid_list
-        df["Flammable"] = flammable_list
-        df["Non-Flammable"] = ""
-
-        return df
-
-
-    def _add_DG_missing_cols_to_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        missing_cols = [
-            "Closed Freight Container", "Loading remarks",
-            "SegregationGroup", "Stowage and segregation", "Package Goods", "Stowage Category", "not permitted bay 74", "Zone"
-        ]
-
-        for col in missing_cols:
-            df[col] = ""
-
-        return df
-
-    def __reorder_df_DG_loadlist_cols(self, df_DG_loadlist: pd.DataFrame) -> pd.DataFrame:
-        DG_cols_ordered_list = ("Serial Number;Operator;POL;POD;Type;Closed Freight Container;Weight;Regulation Body;Ammendmant Version;UN;Class;SubLabel1;SubLabel2;" +\
-                                "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC);FlashPoints;Loading remarks;" +\
-                                "Limited Quantity;Marine Pollutant;PGr;Liquid;Solid;Flammable;Non-Flammable;Proper Shipping Name (Paragraph B of DOC);" +\
-                                "SegregationGroup;SetPoint;Stowage and segregation;Package Goods;Stowage Category;not permitted bay 74;Zone").split(";")
-
-        df_DG_loadlist = df_DG_loadlist[DG_cols_ordered_list]
-
-        return df_DG_loadlist
-    #old code
-    def get_df_DG_loadlist(self, df_onboard_loadlist: pd.DataFrame, df_all_containers: pd.DataFrame, d_cols_map: dict) -> pd.DataFrame:
-        df_DG_containers = df_all_containers[df_onboard_loadlist["DG_Class"]!=""]
-        df_DG_loadlist_cols = [k for k in d_cols_map.keys() if k in df_DG_containers.columns]
-        df_DG_loadlist = df_DG_containers.loc[:,df_DG_loadlist_cols]
-        df_DG_loadlist.columns = [d_cols_map[col] for col in df_DG_loadlist_cols]
-
-        df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist, df_DG_containers)
-        df_DG_loadlist = self._add_DG_missing_cols_to_df(df_DG_loadlist)
-        df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
-        
-        df_DG_loadlist.fillna("", inplace=True) # just in case
-               
-        return df_DG_loadlist
-
-    def get_df_DG_loadlist_exhaustive(self, df_all_containers: pd.DataFrame, d_cols_names: dict) -> pd.DataFrame:
-        
-        df_DG_containers = df_all_containers[df_all_containers['DGS_HAZARD_ID_1']!=""]
-        df_DG_containers = pd.wide_to_long(df_DG_containers,
-                        stubnames=[
-                                    'DGS_REGULATIONS_CODE_',
-                                    'DGS_HAZARD_CODE_VERSION_ID_',
-                                    'DGS_HAZARD_ID_',
-                                    'DGS_DGS_SUB_LABEL1_',
-                                    'DGS_DGS_SUB_LABEL2_',
-                                    'DGS_UNDG_ID_',
-                                    'DGS_SHIPMENT_FLASHPOINT_DEGREE_',
-                                    'DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_',
-                                    'DGS_MEASUREMENT_UNIT_CODE_',
-                                    'DGS_PACKAGING_DANGER_LEVEL_CODE_',
-                                    'DGS_ATT_PSN_DETAIL_DESCRIPTION_',
-                                    'DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE_',
-                                    'DGS_MEA_AAA_MEASURE_',
-                                    'DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_',
-                                    'DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_',
-                                    'DGS_ATT_HAZ_DETAIL_DESCRIPTION_CODE_'
-                                ], 
-                        i=['EQD_ID','LOC_9_LOCATION_ID','LOC_11_LOCATION_ID'],
-                        j='variable'
-                        )
-        
-        df_DG_containers = df_DG_containers[df_DG_containers['DGS_HAZARD_ID_']!=""]
-        df_DG_containers = df_DG_containers.reset_index()
-
-    
-        df_DG_loadlist = df_DG_containers[['EQD_ID','EQD_NAD_CF_PARTY_ID','LOC_9_LOCATION_ID',
-              'LOC_11_LOCATION_ID','EQD_SIZE_AND_TYPE_DESCRIPTION_CODE',
-              'DGS_REGULATIONS_CODE_','DGS_HAZARD_CODE_VERSION_ID_',
-              'DGS_HAZARD_ID_','DGS_DGS_SUB_LABEL1_','DGS_DGS_SUB_LABEL2_',
-              'DGS_UNDG_ID_','DGS_SHIPMENT_FLASHPOINT_DEGREE_','DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_',
-              'DGS_MEASUREMENT_UNIT_CODE_', 'DGS_PACKAGING_DANGER_LEVEL_CODE_',
-              'DGS_ATT_PSN_DETAIL_DESCRIPTION_','DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE_',
-              'DGS_MEA_AAA_MEASURE_','DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_',
-              'DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_','DGS_ATT_HAZ_DETAIL_DESCRIPTION_CODE_',
-              'TMP_TEMPERATURE_DEGREE','TMP_TEMPERATURE_MEASUREMENT_UNIT_CODE'
-              ]].copy()
-        
-
-        df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist, df_DG_containers)
-        df_DG_loadlist = self._add_DG_missing_cols_to_df(df_DG_loadlist)
-        df_DG_loadlist.rename(columns = d_cols_names, inplace=True)  
-        df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
-        
-        df_DG_loadlist.fillna("", inplace=True) # just in case
-    
-
-        return df_DG_loadlist
-    #endregion DG LOADLIST
 
     #region FILLED TANKS
 
@@ -701,15 +520,25 @@ class PreProcessingLayer():
                                   void_tank_type, l_unknown_tanks, l_sel_tank_types,
                                   filter_out_wb=True):
         l_filled_tanks_port = []
-        
-        for no_row, row in enumerate(l_rows):
+        index_LOC_5 = None
+        index_LOC_XXX = None
+
+        for index, row in enumerate(l_rows):
+            if re.match(r'^LOC\+5', row):
+                index_LOC_5 = index
+            elif re.match(r'^LOC\+\w{3}', row):
+                index_LOC_XXX = index
+            if index_LOC_5 is not None and index_LOC_XXX is not None:
+                break
             
-            # useless header
-            if no_row in [0, 1, 2, 3, 4, 6, 7, 8]:
+        for no_row, row in enumerate(l_rows):
+            # useless header (all header until first LOC+ZZZ)
+            
+            if no_row in [i for i in range(index_LOC_XXX) if i != index_LOC_5]:
                 continue
             
             # in header, get the port if to be read there
-            if no_row == 5:
+            if no_row == index_LOC_5:
                 if port_name == "":
                     port = row[6:11] + port_name_extension
                 else:
@@ -2166,10 +1995,9 @@ class PreProcessingLayer():
         df_containers.drop(columns=["Weight_VGM", "Weight_AET"], inplace=True)
 
         return df_containers
-    
-        
+
     def __extract_columns_combined_containers(self, df_all_containers:pd.DataFrame, containers_final_dict:dict) -> pd.DataFrame:
-        
+
         static_columns = [
             "EQD_ID", "LOC_9_LOCATION_ID", "LOC_11_LOCATION_ID", # ID, POL, POD
             "EQD_MEA_VGM_MEASURE", "EQD_MEA_AET_MEASURE", # Weights
@@ -2354,8 +2182,7 @@ class PreProcessingLayer():
         df["POD_nb"] = np.where(df["POL_nb"] > df["POD_nb"], df["POL_nb"] + nbPorts, df["POD_nb"]).astype(int)
 
         return df
-    
-    
+
     def __add_slot_stack_informations(self, df: pd.DataFrame, df_stacks: pd.DataFrame)-> pd.DataFrame:
         
         df_stacks["MacroRow"] = [ int(str(sb)[-2:-1]) for sb in df_stacks["SubBay"] ]
@@ -2409,10 +2236,9 @@ class PreProcessingLayer():
         df["overstowPort"] = [ str(int(row)) if row != np.inf else "" for row in df["overstowPort"] ]
 
         return df
-    
-    
+
     def __add_overstows_20_isolated(self, df:pd.DataFrame, df_stacks:pd.DataFrame, df_rotation:pd.DataFrame) -> pd.DataFrame:
-    
+
         df_ob = self.__get_on_board_df(df, df_stacks, 1)
 
         nbPorts = len(set(df_rotation["ShortName"]))
@@ -2561,7 +2387,7 @@ class PreProcessingLayer():
             "Subport", "Stowage", "DGheated", "Exclusion",
             "OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_LEFT", "OOG_TOP", "OOG_TOP_MEASURE"
             ]]
-        
+
     def get_df_containers_final(self, df_all_containers:pd.DataFrame, containers_final_dict:dict, d_iso_codes_map:dict, df_uslax:pd.DataFrame, df_revenues:pd.DataFrame, df_rotations:pd.DataFrame, df_stacks:pd.DataFrame, df_dg_loadlist:pd.DataFrame, df_dg_exclusions:pd.DataFrame):
         df_copy = df_all_containers.copy()
 
@@ -2581,5 +2407,5 @@ class PreProcessingLayer():
         df_combined_containers_filtered = self.__add_overstows_20_isolated(df_combined_containers_filtered, df_stacks, df_rotations)
         df_combined_containers_filtered = self.__add_non_reefer_at_reefer_slot(df_combined_containers_filtered, df_stacks)
         df_combined_containers_final = self.__arrange_columns(df_combined_containers_filtered)
-    
+
         return df_combined_containers_final

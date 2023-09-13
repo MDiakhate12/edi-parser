@@ -1,9 +1,9 @@
 import numpy as np
 import logging
-
+import pandas as pd
 
 class Vessel:
-    def __init__(self, logger: logging.Logger, speed:float, gm:float, draft:float, vessel_profile:dict, DG_rules:dict):
+    def __init__(self, logger: logging.Logger, speed:float, gm:float, draft:float, vessel_profile:dict, DG_rules:dict, dg_exclusions:pd.DataFrame, fn_stacks:pd.DataFrame):
         self.logger = logger
         self._imo = vessel_profile["imo"]
         self._name = vessel_profile["name"]
@@ -18,6 +18,8 @@ class Vessel:
         self._draft = draft
         self._vessel_profile = vessel_profile
         self._DG_rules = DG_rules
+        self._dg_exclusions = dg_exclusions
+        self._fn_stacks = fn_stacks
         
     def display_info(self):
         print(f"Vessel Name: {self._name}")
@@ -84,6 +86,12 @@ class Vessel:
             dict: The DG rules as a dictionary.
         """
         return self._DG_rules
+    
+    def get_fn_stacks(self):
+        return self._fn_stacks 
+    
+    def get_DG_exclusions(self):
+        return self._dg_exclusions
     
     def get_Fuel_types(self):
         """
@@ -156,7 +164,6 @@ class Vessel:
             max_rows_per_bay[bay] = selected_rows
         
         return max_rows_per_bay
-
 
     def getTCG(self, bay: int, row: int) -> float:
         """For a given bay and row of a stack, the centroid of the stack is

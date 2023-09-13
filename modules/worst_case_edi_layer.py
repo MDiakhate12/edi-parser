@@ -163,7 +163,7 @@ class worst_case_baplies():
             list: A list of matching reference port indices.
         """
         # do first check to see if all ports exist in referentials
-        self._AL.check_sim_with_referentials(port_codes_sim, port_codes_ref, self.__service_line, self.__simulation_output_path, self.__s3_bucket_out)
+        self._AL.check_sim_with_referentials(port_codes_sim, port_codes_ref, self.__service_line)
         
         sim_port_index_list, ref_port_index_list = [], []
         for i, port in enumerate(port_codes_sim):
@@ -219,12 +219,12 @@ class worst_case_baplies():
             elif not len(sublists) and match_tag == True: 
                 self._AL.no_matching_port_check(port,i)
     
-        self._AL.check_if_errors(self.__simulation_output_path , self.__s3_bucket_out)
-        
-        mismatching_ports = self._AL.check_out_of_order_ports(port_codes_ref, ref_port_index_list, referential_folder_name)
-        for mismatch in mismatching_ports: 
-            self.logger.warning(mismatch)
-        self._AL.check_if_errors(self.__simulation_output_path , self.__s3_bucket_out)
+        self._AL.check_if_errors()
+        # check
+        # mismatching_ports = self._AL.check_out_of_order_ports(port_codes_ref, ref_port_index_list, referential_folder_name)
+        # for mismatch in mismatching_ports: 
+        #     self.logger.warning(mismatch)
+        # self._AL.check_if_errors()
         
         self.logger.info("ref_port_index_list: %s", ref_port_index_list)
         return ref_port_index_list
