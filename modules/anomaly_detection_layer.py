@@ -108,7 +108,8 @@ class AnomalyDetectionLayer():
             
     def check_loadlist_beyond_first_call(self, loadlist_flag: int, call_id: str) -> None:
         # the function self.__add_single_anomaly is called more than once because two of the errors can exist at once
-        criticity = "Error"
+        criticity = "Warning"
+        # criticity = "Error"
         if not(loadlist_flag):
             message = f"Missing {self.__edi_file_name_baplie_type_map['container']}"
             error_value = "TBD"
@@ -832,14 +833,16 @@ class AnomalyDetectionLayer():
                 if port_codes_ref.count(port) == 0:
                     message = f"Port: {port} in simulation is not found in referential for service_line {service_line}..."
                     error_value = "TBD"
-                    self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
+                    self.__add_single_anomaly("Warning", message, error_value, file_type=f"call_{i}")
+                    # self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{i}")
         self.check_if_errors()
             
     def no_matching_port_check(self, port:str, index: int):
         
         message = f"could not match port {port} to a port from referential..."
         error_value = "TBD"
-        self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index}")
+        self.__add_single_anomaly("Warning", message, error_value, file_type=f"call_{index}")
+        # self.__add_single_anomaly("Error", message, error_value, file_type=f"call_{index}")
         
     def check_out_of_order_ports(self, port_codes_ref:list, ref_port_index_list:list, referential_folder_name:list)-> list:
         filtered_list = [elem for elem in [i for i, port in enumerate(port_codes_ref)] if min(ref_port_index_list) <= elem <= max(ref_port_index_list) and elem in ref_port_index_list]

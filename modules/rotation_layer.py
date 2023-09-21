@@ -87,6 +87,13 @@ class rotation():
         return d_rotation
     
     
+    def __add_num_moves_to_d_rotation_from_proforma(self, d_rotation: dict, port_name: str, port_num: int) -> None:
+        if port_num != 0:
+            single_speed = d_rotation[port_name]["SpeedSingle"]
+            nb_cranes_proforma = d_rotation[port_name]["NbCranesProforma"]
+            std_time_berth = d_rotation[port_name]["StdTimeAtBerth"]
+            d_rotation[port_name]["nb_moves_calc"] = single_speed * nb_cranes_proforma * std_time_berth
+
     def __add_RW_costs_to_d_rotation(self, d_rotation: dict, port_name: str) -> None:
 
         terminal_code = d_rotation[port_name]["Terminal"]
@@ -304,27 +311,26 @@ class rotation():
         
         d_rotation = self.__map_d_rotation_to_seq_num_port_name(d_rotation)
 
-        port_nums = [int(folder_name.split('_')[0]) for folder_name in self.l_containers_folder_names]
-        port_names = [self.d_seq_num_to_port_name[num] for num in port_nums]
+        # port_nums = [int(folder_name.split('_')[0]) for folder_name in self.l_containers_folder_names]
+        # port_names = [self.d_seq_num_to_port_name[num] for num in port_nums]
         
-        for df, port_name in list(zip(self.l_dfs_containers_POL_POD, port_names)):
+        # for df, port_name in list(zip(self.l_dfs_containers_POL_POD, port_names)):
             
-            port_num = self.d_port_name_to_seq_num[port_name]
-
-            self.__add_num_moves_to_d_rotation_pol(df, d_rotation, port_name, port_num)
-            self.__add_num_moves_to_d_rotation_pod(df, d_rotation, port_name, port_num)
-
+        #     port_num = self.d_port_name_to_seq_num[port_name]
+            
+        #     # self.__add_num_moves_to_d_rotation_pol(df, d_rotation, port_name, port_num)
+        #     # self.__add_num_moves_to_d_rotation_pod(df, d_rotation, port_name, port_num)
+            
         for port_name in self.l_ports_names:
     
             port_num = self.d_port_name_to_seq_num[port_name]
         
             if port_num:
-                
+                self.__add_num_moves_to_d_rotation_from_proforma(d_rotation, port_name, port_num)
                 self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "StdSpeed", "StdFuelCons")
                 
                 self.__add_RW_costs_to_d_rotation(d_rotation, port_name)
                 self.__add_hourly_cost_to_d_rotation(d_rotation, port_name)
-        
         
         # Add missing keys
         for port_data in d_rotation.values():

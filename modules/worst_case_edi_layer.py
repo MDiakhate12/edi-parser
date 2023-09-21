@@ -5,6 +5,7 @@ import json
 import os
 import re
 import logging
+import bisect 
 
 from modules.common_helpers import split_list 
 from modules.data_layer import DataLayer as DL
@@ -82,18 +83,20 @@ class worst_case_baplies():
             return matching_port_index_retro[0]
         
         else:
-            
             matching_value = set(matching_port_index_per).intersection(set(matching_port_index_retro))
             if matching_value:
                 matching_value = int(matching_value.pop())
                 return matching_value   
             else: 
-                self.logger.warning(f"No matching port index found for port: {port} at call: {index} ...")
+                self.logger.info(f"No matching port index found for port: {port} at call: {index} ...")
+                self.logger.info("*" * 80)
                 
         
     # find missing port calls
     def _find_missing_port_calls(self, ref_port_index_list:list, referential_folder_name:list):
         missing_port_calls = []
+        print(ref_port_index_list)
+        ref_port_index_list = [x for x in ref_port_index_list if x is not None]
         if max(ref_port_index_list) == ref_port_index_list[-1]:
             # find the range of numbers to check
             start, end = ref_port_index_list[0], ref_port_index_list[-1]
@@ -103,8 +106,9 @@ class worst_case_baplies():
                 if i not in ref_port_index_list:
                     missing_port_calls.append(i)
             missing_port_folder_list = [referential_folder_name[i] for i in missing_port_calls]
-            logging.info("missing port calls: %s", missing_port_calls)
-            logging.info("missing port folder list: %s", missing_port_folder_list)
+            self.logger.info("*" * 80)
+            self.logger.info("missing port calls: %s", missing_port_calls)
+            self.logger.info("missing port folder list: %s", missing_port_folder_list)
             return missing_port_calls, missing_port_folder_list
         else: 
             max_elem = max(ref_port_index_list)
@@ -115,8 +119,9 @@ class worst_case_baplies():
             missing_ints_start = [i for i in int_range if i not in ref_port_index_list]
             missing_port_calls = missing_ints_end + missing_ints_start
             missing_port_folder_list = [referential_folder_name[i] for i in missing_port_calls]
-            logging.info("missing port calls: %s", missing_port_calls)
-            logging.info("missing port folder list: %s", missing_port_folder_list)
+            self.logger.info("*" * 80)
+            self.logger.info("missing port calls: %s", missing_port_calls)
+            self.logger.info("missing port folder list: %s", missing_port_folder_list)
             return missing_port_calls, missing_port_folder_list
 
     def _get_port_calls_in_rotation(self, path:str, s3_bucket:str):
@@ -149,7 +154,6 @@ class worst_case_baplies():
         
         return simulation_folder_names, port_codes_sim, referential_folder_name, port_codes_ref
     
-    
     def _process_port_codes(self, port_codes_sim:list, port_codes_ref:list, referential_folder_name:list):
         """
         Process port codes and return the matching reference port indices list.
@@ -166,59 +170,73 @@ class worst_case_baplies():
         self._AL.check_sim_with_referentials(port_codes_sim, port_codes_ref, self.__service_line)
         
         sim_port_index_list, ref_port_index_list = [], []
+        
         for i, port in enumerate(port_codes_sim):
-            self.logger.info("Port: %s", port)
 
-            l_PODs_Perspective = self._perspective_approach_POD(i, port, port_codes_sim)
-            self.logger.info("POD Portfolio Ahead: %s", l_PODs_Perspective)
-
-            l_PODs_Retrospective = self._retrospective_approach_POD(i, port, port_codes_sim)
-            self.logger.info("POD Portfolio Behind: %s", l_PODs_Retrospective)
-            
-            
-            indices = []
-            sublists = []
-            match_tag = False
-            for j, port_ref in enumerate(port_codes_ref):
-                if port == port_ref and port_codes_ref.count(port_ref) == 1:
-                    ref_port_index_list.append(j)
-                    self.logger.info("will_be_matching to: %s from referential.", referential_folder_name[j])
-                    self.logger.info("*" * 80)
-
-                elif port == port_ref and port_codes_ref.count(port_ref) != 1:
-                    # Find the indices of all occurrences of port
-                    indices = [k for k, x in enumerate(port_codes_ref) if x == port]
-                    match_tag = True
-                    # Iterate over the indices and create sublists
-                    sublists = []
-                    for k in range(len(indices)):
-                        start = indices[k]
-                        end = indices[(k + 1) % len(indices)]
-                        if len(port_codes_ref[start:end + 1]) != 0:
-                            sublists.append(port_codes_ref[start + 1:end])
-                    # Find the index of the last occurrence of port
-                    sublists.append(port_codes_ref[indices[-1] + 1:] + port_codes_ref[0:indices[0]])
+                self.logger.info("Port: %s", port)
                 
-  
-
-            if len(sublists):
-                self.logger.info("port calls between occurrences: %s", sublists)
-                self.logger.info("at indices = %s", indices)
-
-                matching_port_index_per = self._check_matching_perspective_approach(port, port_codes_ref, sublists, l_PODs_Perspective)
-                matching_port_index_retro = self._check_matching_retrospective_approach(port, indices, port_codes_ref, sublists, l_PODs_Retrospective)
-                try:
-                    matching_value = self._get_matching_port_index(port, i, matching_port_index_per, matching_port_index_retro)
-                    ref_port_index_list.append(matching_value)
-                    self.logger.info("will_be_matching to: %s", referential_folder_name[matching_value])
+                if port not in port_codes_ref: 
+                    self.logger.info(f"Port {port} is not found in referential files for service line: {self.__service_line}...")
                     self.logger.info("*" * 80)
-                except: 
                     
-                    self._AL.no_matching_port_check(port,i)
+                else:
+                    l_PODs_Perspective = self._perspective_approach_POD(i, port, port_codes_sim)
+                    self.logger.info("POD Portfolio Ahead: %s", l_PODs_Perspective)
 
-            elif not len(sublists) and match_tag == True: 
-                self._AL.no_matching_port_check(port,i)
-    
+                    l_PODs_Retrospective = self._retrospective_approach_POD(i, port, port_codes_sim)
+                    self.logger.info("POD Portfolio Behind: %s", l_PODs_Retrospective)
+                    
+                    
+                    indices = []
+                    sublists = []
+                    match_tag = False
+                    for j, port_ref in enumerate(port_codes_ref):
+                        if port == port_ref and port_codes_ref.count(port_ref) == 1:
+                            ref_port_index_list.append(j)
+                            sim_port_index_list.append(i)
+                            self.logger.info("will_be_matching to: %s from referential.", referential_folder_name[j])
+                            self.logger.info("*" * 80)
+
+                        elif port == port_ref and port_codes_ref.count(port_ref) != 1:
+                            # Find the indices of all occurrences of port
+                            indices = [k for k, x in enumerate(port_codes_ref) if x == port]
+                            match_tag = True
+                            # Iterate over the indices and create sublists
+                            sublists = []
+                            for k in range(len(indices)):
+                                start = indices[k]
+                                end = indices[(k + 1) % len(indices)]
+                                if len(port_codes_ref[start:end + 1]) != 0:
+                                    sublists.append(port_codes_ref[start + 1:end])
+                            # Find the index of the last occurrence of port
+                            sublists.append(port_codes_ref[indices[-1] + 1:] + port_codes_ref[0:indices[0]])
+                        
+        
+
+                    if len(sublists):
+                        self.logger.info("port calls between occurrences: %s", sublists)
+                        self.logger.info("at indices = %s", indices)
+
+                        matching_port_index_per = self._check_matching_perspective_approach(port, port_codes_ref, sublists, l_PODs_Perspective)
+                        matching_port_index_retro = self._check_matching_retrospective_approach(port, indices, port_codes_ref, sublists, l_PODs_Retrospective)
+                        try:
+                            matching_value = self._get_matching_port_index(port, i, matching_port_index_per, matching_port_index_retro)
+                            if matching_value:
+                                ref_port_index_list.append(matching_value)
+                                sim_port_index_list.append(i)
+                                self.logger.info("will_be_matching to: %s", referential_folder_name[matching_value])
+                                self.logger.info("*" * 80)
+                            
+                        except: 
+                            self.logger.info("No Matching port found...")
+                            self.logger.info("*" * 80)
+                            self._AL.no_matching_port_check(port,i)
+
+                    elif not len(sublists) and match_tag == True: 
+                        self.logger.info("No Matching port found...")
+                        self.logger.info("*" * 80)
+                        self._AL.no_matching_port_check(port,i)
+        
         self._AL.check_if_errors()
         # check
         # mismatching_ports = self._AL.check_out_of_order_ports(port_codes_ref, ref_port_index_list, referential_folder_name)
@@ -226,8 +244,9 @@ class worst_case_baplies():
         #     self.logger.warning(mismatch)
         # self._AL.check_if_errors()
         
-        self.logger.info("ref_port_index_list: %s", ref_port_index_list)
-        return ref_port_index_list
+        self.logger.info("matched ref_port_index_list: %s", ref_port_index_list)
+        self.logger.info("matched sim_port_index_list: %s", sim_port_index_list)
+        return ref_port_index_list, sim_port_index_list
     
         
     def check_numbers_in_order(self, lst, max_value):
@@ -246,9 +265,7 @@ class worst_case_baplies():
         return result
 
 
-
-    
-    def _copy_loadlist_files(self, ref_port_index_list:list, referential_folder_name:list, folder_names:list) -> None:
+    def _copy_loadlist_files(self, ref_port_index_list:list, referential_folder_name:list, sim_port_index_list:list, folder_names:list) -> None:
         """
         Copy LoadList files from referential to the corresponding simulation folders.
 
@@ -260,23 +277,26 @@ class worst_case_baplies():
             simulation_input_path (str): Path to the simulation input folder.
             s3_bucket_out (str): S3 bucket name for the simulation input.
         """
-        for i, call_number in enumerate(ref_port_index_list[2:]):
-            source_key = os.path.join(self.__referential_input, referential_folder_name[call_number])
-            destination_key = os.path.join(self.__simulation_input, folder_names[2:][i])
 
-            files_in_ref_path = self._DL.list_files_in_path(source_key, self.__s3_bucket_ref)
-            files_in_simulation_call = self._DL.list_files_in_path(destination_key, self.__s3_bucket_out)
-            if "LoadList.edi" not in files_in_simulation_call:
-                self.logger.info(f"LoadList Baplie file will be copied from folder: {source_key} to {destination_key}...")
-                if 'LoadList.edi' not in files_in_ref_path:
-                    self.logger.error("no Loadlist file found in referential path: %s ..." % filename)
-                    raise ValueError("no Loadlist found in referential path...")
-                
-                for filename in files_in_ref_path:
-                    if filename in ["LoadList.edi"]:
-                        file_dir = os.path.join(source_key, filename)
-                        
-                        self._DL.copy_file_loadlist(file_dir, destination_key, self.__s3_bucket_ref, self.__s3_bucket_out)
+        for i, call_number in enumerate(ref_port_index_list):
+            if call_number is not None and sim_port_index_list[i] not in [0, 1]:
+                source_key = os.path.join(self.__referential_input, referential_folder_name[call_number])
+                destination_folder_key = [int(folder_name.split('_')[1])for folder_name in folder_names]
+                folder_name = folder_names[destination_folder_key.index(sim_port_index_list[i])]
+                destination_key = os.path.join(self.__simulation_input, folder_name)
+                files_in_ref_path = self._DL.list_files_in_path(source_key, self.__s3_bucket_ref)
+                files_in_simulation_call = self._DL.list_files_in_path(destination_key, self.__s3_bucket_out)
+                if "LoadList.edi" not in files_in_simulation_call:
+                    self.logger.info(f"LoadList Baplie file will be copied from folder: {source_key} to {destination_key}...")
+                    if 'LoadList.edi' not in files_in_ref_path:
+                        self.logger.error("no Loadlist file found in referential path: %s ..." % filename)
+                        raise ValueError("no Loadlist found in referential path...")
+                    
+                    for filename in files_in_ref_path:
+                        if filename in ["LoadList.edi"]:
+                            file_dir = os.path.join(source_key, filename)
+                            
+                            self._DL.copy_file_loadlist(file_dir, destination_key, self.__s3_bucket_ref, self.__s3_bucket_out)
 
     def replace_location(self, data: list, replacements: list) -> None:
         """
@@ -304,7 +324,7 @@ class worst_case_baplies():
                     if isinstance(sublist_element, str):  # Check if the element is a string
                         sublist[j][k] = re.sub(pattern, f'LOC+9+{replacement}', sublist_element)
     
-    def _process_missing_port_folders(self, missing_port_folder_list:list, folder_names:list, port_codes_sim:list, missing_port_calls:list) -> None:
+    def _process_missing_port_folders(self, missing_port_folder_list:list, ref_port_index_list:list, folder_names:list, port_codes_sim:list, missing_port_calls:list) -> None:
         """
         Process missing port folders and divide the LoadList.edi file into corresponding simulation folders.
 
@@ -397,13 +417,30 @@ class worst_case_baplies():
                                     EQD_POD_dict[list_name].append(segment)
                             else: 
                                 EQD_POD_list = None
-            if EQD_POD_list:                        
+            if EQD_POD_list:
+                self.logger.info("*" * 80)                     
                 self.logger.info("EQD Categories: %s", EQD_POD_list)
                 self.logger.info("POD_Portfolio: %s", POD_file)
+                self.logger.info("*" * 80)  
                 for EQD_POD in EQD_POD_list:
+                    self.logger.info(f"Distributing Containers for: {EQD_POD}...")
                     POD = EQD_POD[4:9]
                     self.logger.info("POD: %s", POD)
-                    POD_index_start = max(missing_port_calls[k], 2)
+
+                    max_element = max(ref_port_index_list)
+
+                    for index, value in enumerate(ref_port_index_list):
+                        if value > missing_port_calls[k]:
+                            index = ref_port_index_list.index(value)
+                            break
+                        elif missing_port_calls[k] == max_element and missing_port_calls[k] != ref_port_index_list[-1]:
+                            index = ref_port_index_list.index(0)
+                            break
+                        elif missing_port_calls[k] == max_element and missing_port_calls[k] == ref_port_index_list[-1]:
+                            index = ref_port_index_list.index(missing_port_calls[k])
+                            break
+
+                    POD_index_start = max(index, 2)
                     try:
                         POD_index_end = port_codes_sim.index(POD, POD_index_start + 1) 
                     except ValueError:
@@ -412,11 +449,24 @@ class worst_case_baplies():
                         POD_index_end = len(port_codes_sim) 
                     self.logger.info("POD_index_start: %s", POD_index_start)
                     self.logger.info("POD_index_end: %s", POD_index_end)
-                    self.logger.info("POL: %s", port_codes_sim[POD_index_start:POD_index_end])
+                    
+                    #remove folders without loadlists 
+                    folders_to_update = folder_names[POD_index_start:POD_index_end]
+                    port_codes_sim_to_replace = port_codes_sim[POD_index_start:POD_index_end]
+
+                    for j, folder_name in enumerate(folders_to_update):
+                        folders = os.path.join(self.__simulation_input, folder_name)
+                        files_in_path = self._DL.list_files_in_path(folders,self.__s3_bucket_out)
+                        if "LoadList.edi" not in files_in_path:
+                            del folders_to_update[j]
+                            del port_codes_sim_to_replace[j]
+                            
+                    self.logger.info("POL: %s", port_codes_sim_to_replace)
                     self.logger.info("number of Containers to be divided is = %s", len(EQD_POD_dict[EQD_POD]))
-                    result = split_list(EQD_POD_dict[EQD_POD],(POD_index_end - POD_index_start))
-                    self.replace_location(result, port_codes_sim[POD_index_start:POD_index_end])
-                    for j, folder_name in enumerate(folder_names[POD_index_start:POD_index_end]):
+                    self.logger.info("*" * 80)  
+                    result = split_list(EQD_POD_dict[EQD_POD],len(folders_to_update))
+                    self.replace_location(result, port_codes_sim_to_replace)
+                    for j, folder_name in enumerate(folders_to_update):
                         folders = os.path.join(self.__simulation_input, folder_name,"LoadList.edi")
                         flattened_list = []
                         for inner_list in result[j]:
@@ -444,12 +494,12 @@ class worst_case_baplies():
         """
         folder_names, port_codes_sim, referential_folder_name, port_codes_ref = self._get_port_lists()
         
-        ref_port_index_list = self._process_port_codes(port_codes_sim, port_codes_ref, referential_folder_name)
-
-        self._copy_loadlist_files(ref_port_index_list, referential_folder_name, folder_names)
+        ref_port_index_list, sim_port_index_list = self._process_port_codes(port_codes_sim, port_codes_ref, referential_folder_name)
+        
+        self._copy_loadlist_files(ref_port_index_list, referential_folder_name, sim_port_index_list, folder_names)
 
         # find missing port calls
         missing_port_calls, missing_port_folder_list = self._find_missing_port_calls(ref_port_index_list, referential_folder_name)
 
-        self._process_missing_port_folders(missing_port_folder_list, folder_names, port_codes_sim, missing_port_calls)
+        self._process_missing_port_folders(missing_port_folder_list,ref_port_index_list, folder_names, port_codes_sim, missing_port_calls)
                     

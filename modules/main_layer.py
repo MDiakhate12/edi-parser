@@ -9,8 +9,8 @@ if "" in DEFAULT_MISSING:
 import logging
 # Set up the root logger with the desired log level and format
 # Disable the default stream handler of the root logger
-# root_logger = logging.getLogger()
-# root_logger.handlers = []
+root_logger = logging.getLogger()
+root_logger.handlers = []
 
 # # Create a file handler with 'w' filemode to truncate the file
 # file_handler = logging.FileHandler('log_file.log', mode='w')
@@ -24,16 +24,16 @@ import logging
 # root_logger.addHandler(file_handler)
 
 # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
+# # Set the formatter for the console handler
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
 
-# # # # Add the console handler to the root logger
-# root_logger.addHandler(console_handler)
+# # # Add the console handler to the root logger
+root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
@@ -86,7 +86,6 @@ class MainLayer():
         
         # initialize processing layer
         self.__PL = PL()
-        
 
     def __init_file_paths_from_event(self, path: str, simulation_id: str, s3_bucket: str="") -> None:
         """
@@ -267,8 +266,6 @@ class MainLayer():
             self.__d_seq_num_to_port_name[seq_num] = port_name
         
         
-        # self.__AL.check_if_errors()
-        
         self.__get_port_name_and_seq_num_maps()
         return after_first_call_loadlist
 
@@ -408,6 +405,7 @@ class MainLayer():
         return l_container_groups_containers_lines if not self.__reuse_previous_results else None
         #======================================================================================================================================       
         ## Stowing and overstowing ##
+    
     def __get_df_from_baplie_and_return_types(self, baplie_path: str, call_id: str, file_type: str, d_csv_cols_to_segments_map: dict, d_main_to_sub_segments_map: dict, s3_bucket:str):
        
         l_baplie_segments, new_data_flag, baplie_type_from_file_name, baplie_type_from_content = \
@@ -733,31 +731,38 @@ class MainLayer():
         
         # # Intialize worst cast files generation 
         self.__service_code = lashing_parameters_dict[0]['service']
-        self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
-        if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
-            self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
-            EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
-            self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__error_log_path, self.__s3_bucket_in, self.__s3_bucket_out)
-            self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
+        # # Check if service code exists in EDI referentials 
+        self.logger.info(f"Checking if {self.__service_code} is in service line EDI's referential folder...")
+        if self.__service_code in self.__DL.list_folders_in_path(f"{self.__Edi_static_in_dir}", self.__s3_bucket_in):
+            self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
+            if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
+                self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
+                EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
+                self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__error_log_path, self.__s3_bucket_in, self.__s3_bucket_out)
+                self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
 
-            # Check if all LoadLists exist after generation
-            for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
-                baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
-                folder_name_split = folder_name.split("_")
-                call_id = "_".join(folder_name_split[-2:])
-                loadlist_flag = 0 
-                for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
-                    if i <2:
-                        loadlist_flag = 1
-                    if i >= 2:
-                            if file_name == "LoadList.edi": 
-                                loadlist_flag = 1
-                self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
-                
-            self.__AL.check_if_errors()
+                # Check if all LoadLists exist after generation
+                for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+                    baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+                    folder_name_split = folder_name.split("_")
+                    call_id = "_".join(folder_name_split[-2:])
+                    loadlist_flag = 0 
+                    for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                        if i <2:
+                            loadlist_flag = 1
+                        if i >= 2:
+                                if file_name == "LoadList.edi": 
+                                    loadlist_flag = 1
+                    self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
+                    
+                self.__AL.check_if_errors()
+            else: 
+                self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
+            self.logger.info("*" * 80)   
         else: 
-            self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
-        self.logger.info("*" * 80)    
+            self.logger.info(f"Service line {self.__service_code} not found in EDI referentials...")
+            self.logger.info("*" * 80)  
+            
         # Intialize Vessel
         self.logger.info(f"Creating Vessel instance for vessel: {self.__vessel_id}")
         # vessel profile file in referentials

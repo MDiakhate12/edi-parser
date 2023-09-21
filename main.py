@@ -1,5 +1,6 @@
 from boto3 import resource
 from boto3 import client
+from botocore.exceptions import NoCredentialsError
 import logging
 import json
 import os
@@ -9,6 +10,7 @@ import traceback
 sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.main_layer import MainLayer
 from modules.data_layer import DataLayer as DL
+
 
 class CustomAdapter(logging.LoggerAdapter):
     """
