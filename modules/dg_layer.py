@@ -1551,60 +1551,7 @@ class DG:
         df_cg_exclusion_zones_nb_dg = self.__get_f_cg_exclusion_zones_nb_dg(d_cg_combi_subbays)
         
         return df_cg_exclusion_zones, df_cg_exclusion_zones_nb_dg
-def main():
-    # Setup logging
-    logger = logging.getLogger('DG')
-    logger.setLevel(logging.INFO)
-    
-    # Setup sample data
-    df_all_containers_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Optistow_working_repo\Preprocessing-CICD\Pre-processing-CICD\df_all_containers.csv"
-    # DG Loadlist config 
-    DG_loadlist_config_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Optistow_working_repo\Preprocessing-CICD\Pre-processing-CICD\DG_loadlist_config.json"
-    imdg_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\service_input_output\data\referential\hz_imdg_exis_subs.csv"
-    with open(DG_loadlist_config_path) as json_file:
-                DG_loadlist_config_dict = json.load(json_file)
 
-    vessel_profile_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\referential\vessels\9454448\vessel_profile.json"
-    DG_rules_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\referential\vessels\9454448\DG_Rules.json"
-    with open(vessel_profile_path) as json_file:
-                vessel_profile_dict = json.load(json_file)
-                
-    with open(DG_rules_path) as json_file:
-                dg_rules_dict = json.load(json_file)
-    dg_exclusions_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\referential\vessels\9454448\DG Exclusions.csv"
-    dg_exclusions = pd.read_csv(dg_exclusions_path, dtype=str, na_values= "", sep=';')         
-    df_all_containers = pd.read_csv(df_all_containers_path, dtype=str, na_values= "")
-
-    table_7_2_4_expanded_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\service_input_output\data\referential\vessels\9454436\table_7_2_4_expanded.csv"
-    table_7_2_4_expanded = pd.read_csv(table_7_2_4_expanded_path, dtype=str, na_values= "", sep=";")
-    table_7_2_4_expanded.drop("CLASS", axis=1, inplace=True)
-    table_7_2_4_expanded.index = table_7_2_4_expanded.columns
-    
-
-    fn_stacks_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\referential\vessels\9454448\Stacks Extrait Prototype MP_IN.csv"
-    fn_stacks = pd.read_csv(fn_stacks_path, dtype=str, na_values= "", sep=";")
-    
-    df_grouped_containers_path = r"C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\Clean_Optistow_Repo\vas-data\service_input_output\data\simulations\sim1_2_3\intermediate\Container Groups Containers.csv"
-    df_grouped_containers = pd.read_csv(df_grouped_containers_path, dtype=str, na_values= "", sep=";")
-    
-    imdg_haz_exis = pd.read_csv(imdg_path, dtype=str, na_values= "")
-    vessel = Vessel(logger, 14, 6, 10,vessel_profile_dict, dg_rules_dict, dg_exclusions, fn_stacks)
-    # Initialize DG class
-    dg = DG(logger, vessel, DG_loadlist_config_dict, imdg_haz_exis, "master", table_7_2_4_expanded)
-    
-    # Get exhaustive DG loadlist DataFrame
-    df_DG_loadlist = dg.get_df_dg_loadlist(df_all_containers)
-    df_exclusions = dg.get_dg_exclusions(df_DG_loadlist)
-    df_cg_exclusion_zones, df_cg_exclusion_zones_nb_dg = dg.get_exclusion_zones(df_grouped_containers, df_exclusions)
-
-    table_7_2_4 = dg.output_adjusted_table_7_2_4(table_7_2_4_expanded, df_DG_loadlist)
-    print(table_7_2_4)
-
-if __name__ == "__main__":
-    main()
-    
-# import doctest
-# doctest.testmod()
 
 
 
