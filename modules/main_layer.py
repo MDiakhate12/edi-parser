@@ -9,8 +9,8 @@ if "" in DEFAULT_MISSING:
 import logging
 # Set up the root logger with the desired log level and format
 # Disable the default stream handler of the root logger
-root_logger = logging.getLogger()
-root_logger.handlers = []
+# root_logger = logging.getLogger()
+# root_logger.handlers = []
 
 # # Create a file handler with 'w' filemode to truncate the file
 # file_handler = logging.FileHandler('log_file.log', mode='w')
@@ -24,16 +24,16 @@ root_logger.handlers = []
 # root_logger.addHandler(file_handler)
 
 # Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
+# console_handler = logging.StreamHandler()
+# console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # # Set the formatter for the console handler
-console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(console_formatter)
+# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# console_handler.setFormatter(console_formatter)
 
 # # # Add the console handler to the root logger
-root_logger.addHandler(console_handler)
+# root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
