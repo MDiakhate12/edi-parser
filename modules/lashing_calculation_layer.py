@@ -17,8 +17,8 @@ class LashingGetter():
         self.__Lpp = 378.4                         # Length between perpendiculars (bpp), [m]
         self.__hw = 200 / math.sqrt(self.__Lpp)     # Wave parameter hw=10.281 m (Pt B, Ch 5, Sec 3)
         self.__C = 10.75 - ((self.__Lpp - 350) / 150) ** 1.5
-        self.__W = 53.6                            # Width, [m]
-        DS = 25.1                                   # Design speed, [Kn]
+        self.__W = 53.6                             # Width, [m]
+        self.DS = 25.1                              # Design speed, [Kn]
         Rlt = 150                                   # Permissible racking load (transverse force), [kN]
         Rll = 100                                   # Permissible racking load (longitudinal force), [kN]
         Pt = 250                                    # Permissible tension for non-bottom layer, [kN]
@@ -41,6 +41,9 @@ class LashingGetter():
 
     def getValues(self):
         # Calculation of various values based on inputs
+        ## setting self.speed to Design speed in case of Unrestricted
+        self.speed = self.DS if self.lashing_config == 'UNRESTRICTED' else self.speed
+        
         self.__F = 0.164 * self.speed / math.sqrt(self.__Lpp)  # Froude's number F=0.212 (Pt B, Ch 5, Symbols)
         ab = self.__n * (0.76 * self.__F + 1.875 * self.__hw / self.__Lpp)  # Motion and acceleration parameter ab=0.212 (Pt B, Ch 5, Sec 3)
         self.__ab = ab

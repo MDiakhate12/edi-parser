@@ -910,7 +910,7 @@ class AnomalyDetectionLayer():
                                 
                 if index == 0:    
                     # Check if 'worldwide' and 'service' are alphabetic
-                    for key in ['worldwide', 'service']:
+                    for key in ['worldwide']:
                             if not data_entry[key].isalpha():
                                 criticity = "Error"
                                 message = f"key {key} = '{data_entry[key]} in rotation.csv is not alphabetic..."

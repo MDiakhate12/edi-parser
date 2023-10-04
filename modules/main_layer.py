@@ -7,23 +7,8 @@ if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
 
 import logging
-# Set up the root logger with the desired log level and format
-# Disable the default stream handler of the root logger
-# root_logger = logging.getLogger()
-# root_logger.handlers = []
 
-# # Create a file handler with 'w' filemode to truncate the file
-# file_handler = logging.FileHandler('log_file.log', mode='w')
-# file_handler.setLevel(logging.DEBUG)
-
-# # Set the formatter for the file handler
-# file_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# file_handler.setFormatter(file_formatter)
-
-# # # Add the file handler to the root logger
-# root_logger.addHandler(file_handler)
-
-# Create a console handler
+# # Create a console handler
 # console_handler = logging.StreamHandler()
 # console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -32,8 +17,6 @@ import logging
 # console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 # console_handler.setFormatter(console_formatter)
 
-# # # Add the console handler to the root logger
-# root_logger.addHandler(console_handler)
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
@@ -248,9 +231,7 @@ class MainLayer():
                         
                         if seq_num == 1:
                             self.__get_first_two_ports_baplie_and_csv_paths(baplies_dir, file_name, folder_name)   
-    
-                    
-                
+
             # error in case of wrong edi files
             # first folder with no OnBoard.edi
             
@@ -463,14 +444,6 @@ class MainLayer():
         for col in l_DGS_cols:
             col_name = "DGS_" + col
             df_copy[col_name] = df_copy.apply(lambda row: row.get(col_name + row["lowest_DG_class_suffix"], np.nan), axis=1)
-            # df_copy[col_name] = df_copy.apply(lambda row: row[col_name+row["lowest_DG_class_suffix"]], axis=1)
-      
-        # for col in l_DGS_cols:
-        #     col_name = "DGS_" + col
-        #     new_col_name = col_name + df_copy["lowest_DG_class_suffix"].iloc[0]
-        #     if new_col_name not in df_copy.columns:
-        #         df_copy[new_col_name] = pd.Series(np.nan, index=df_copy.index)
-        #     df_copy[col_name] = df_copy[new_col_name]
             
         return df_copy
 
