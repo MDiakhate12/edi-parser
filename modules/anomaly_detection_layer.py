@@ -894,7 +894,7 @@ class AnomalyDetectionLayer():
                     try:
                         float(data_entry[key])
                     except:
-                        criticity = "Error"
+                        criticity = "Warning"
                         message = f"key {key} = '{data_entry[key]}'is not numeric..."
                         error_value = "TBD"
                         self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])

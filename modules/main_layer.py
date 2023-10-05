@@ -8,14 +8,14 @@ if "" in DEFAULT_MISSING:
 
 import logging
 
-# # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Create a console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
+# Set the formatter for the console handler
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
 
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
@@ -693,7 +693,8 @@ class MainLayer():
         RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in, sep=";")
         self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
-        rotation_intermediate = rotation_intermediate.iloc[:len(self.__d_seq_num_to_port_name)-1]
+        
+        # rotation_intermediate = rotation_intermediate.iloc[:len(self.__d_seq_num_to_port_name)-1]
         self.logger.info("Reading consumption csv file from referential vessels folder...")
         consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
         self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")

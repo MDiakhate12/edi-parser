@@ -23,6 +23,10 @@ class rotation():
 
     def __process_df_intermediate_rotation(self) -> dict:
         
+        self.rotations_intermediate['worldwide'].fillna(self.rotations_intermediate['worldwide'][0], inplace=True)
+        self.rotations_intermediate['Gmhold'].fillna(self.rotations_intermediate['Gmhold'][0], inplace=True)
+        self.rotations_intermediate['Gmdeck'].fillna(self.rotations_intermediate['Gmdeck'][0], inplace=True)
+        self.rotations_intermediate['MaxDraft'].fillna(self.rotations_intermediate['MaxDraft'][0], inplace=True)
         float_cols = self.__rotation_csv_map["cols_intermediate_dtypes"]["float_cols"]
         int_cols = self.__rotation_csv_map["cols_intermediate_dtypes"]["int_cols"]
 
@@ -32,7 +36,7 @@ class rotation():
         self.rotations_intermediate["nb_moves_calc"] = 0 # this is for calculating the number of moves required for each port
         l_records = self.rotations_intermediate.to_dict(orient="records")
         d_rotation = { record["ShortName"]: record for record in l_records }
-    
+        
         return d_rotation
     
     
@@ -53,6 +57,7 @@ class rotation():
                         # Add the updated entry to the new dictionary
                         updated_dict2[port_name] = d_rotation[port_key]
                         break
+
             return updated_dict2
         
     def __add_num_moves_to_d_rotation_pol(self, df_port_containers: pd.DataFrame, d_rotation: dict, port_name: str, port_num: int) -> dict:
@@ -309,7 +314,7 @@ class rotation():
                     subdict["cons_per_hour_at_v_max"] = 0 
 
         
-        d_rotation = self.__map_d_rotation_to_seq_num_port_name(d_rotation)
+        # d_rotation = self.__map_d_rotation_to_seq_num_port_name(d_rotation)
 
         # port_nums = [int(folder_name.split('_')[0]) for folder_name in self.l_containers_folder_names]
         # port_names = [self.d_seq_num_to_port_name[num] for num in port_nums]
@@ -320,10 +325,18 @@ class rotation():
             
         #     # self.__add_num_moves_to_d_rotation_pol(df, d_rotation, port_name, port_num)
         #     # self.__add_num_moves_to_d_rotation_pod(df, d_rotation, port_name, port_num)
+        for key, port_name in self.d_seq_num_to_port_name.items():
+            # Check if the sequence_number exists in dict2
+            for port_key, port_info in d_rotation.items():
+                if port_info['Sequence'] == key:
+                    # Update the 'ShortName' field in the second dictionary with the port_name
+                    d_rotation[port_key]['ShortName'] = port_name
+                    break    
+
+        port_names = list(d_rotation.keys())
+        for port_name in port_names:
             
-        for port_name in self.l_ports_names:
-    
-            port_num = self.d_port_name_to_seq_num[port_name]
+            port_num = d_rotation[port_name]['Sequence']
         
             if port_num:
                 self.__add_num_moves_to_d_rotation_from_proforma(d_rotation, port_name, port_num)
