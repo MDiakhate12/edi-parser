@@ -628,8 +628,8 @@ class AnomalyDetectionLayer():
             d_stacks_rows_by_bay_row_deck: dict,
             d_type_to_size_map: dict
         ) -> None:
-
         criticity = "Error"
+        # criticity = "Warning"
         l_container_bay_row_tier_keys = list(d_container_info_by_bay_row_tier.keys())
         for i, container_tup in enumerate(l_container_bay_row_tier_keys):
             container_id = d_container_info_by_bay_row_tier[container_tup]["container_id"]

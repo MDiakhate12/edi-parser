@@ -652,22 +652,32 @@ class DG:
 
     def get_df_dg_loadlist(self, df_all_containers:pd.DataFrame) -> pd.DataFrame:
         df_DG_loadlist = self.__get_df_DG_loadlist_exhaustive(df_all_containers)
-        df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist)
-        df_DG_loadlist = self.__filter_columns_df_DG_loadlist(df_DG_loadlist)
-        df_DG_loadlist = self.__rename_df_DG_columns(df_DG_loadlist)
-        self.__get_closed_freight_containers(df_DG_loadlist)
-        self.__get_DGC_packaged_goods(df_DG_loadlist)
-        self.__map_packaging_group(df_DG_loadlist)
-        df_DG_loadlist = self.__merge_DG_loadlist_with_imdg_code(df_DG_loadlist)
-        df_DG_loadlist = self.__process_stowage_and_segregation(df_DG_loadlist)
-        self.__get_liquid_state(df_DG_loadlist)
-        self.__get_solid_state(df_DG_loadlist)
-        self.__get_flammable_state(df_DG_loadlist)
-        self.__get_non_flammable_state(df_DG_loadlist)
-        self.__get_zone_port(df_DG_loadlist)
-        self.__get_loading_remarks(df_DG_loadlist)
-        df_DG_loadlist = self.__add_not_permitted_bay_column(df_DG_loadlist)
-        df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
+        if df_DG_loadlist.shape[0] != 0:
+            df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist)
+            df_DG_loadlist = self.__filter_columns_df_DG_loadlist(df_DG_loadlist)
+            df_DG_loadlist = self.__rename_df_DG_columns(df_DG_loadlist)
+            self.__get_closed_freight_containers(df_DG_loadlist)
+            self.__get_DGC_packaged_goods(df_DG_loadlist)
+            self.__map_packaging_group(df_DG_loadlist)
+            df_DG_loadlist = self.__merge_DG_loadlist_with_imdg_code(df_DG_loadlist)
+            df_DG_loadlist = self.__process_stowage_and_segregation(df_DG_loadlist)
+            self.__get_liquid_state(df_DG_loadlist)
+            self.__get_solid_state(df_DG_loadlist)
+            self.__get_flammable_state(df_DG_loadlist)
+            self.__get_non_flammable_state(df_DG_loadlist)
+            self.__get_zone_port(df_DG_loadlist)
+            self.__get_loading_remarks(df_DG_loadlist)
+            df_DG_loadlist = self.__add_not_permitted_bay_column(df_DG_loadlist)
+            df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
+        else: 
+            DG_cols = ("Serial Number;Operator;POL;POD;Type;Closed Freight Container;Weight;Regulation Body;Ammendmant Version;UN;Class;SubLabel1;SubLabel2;" +\
+                        "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC);FlashPoints;Loading remarks;" +\
+                        "Limited Quantity;Marine Pollutant;PGr;Liquid;Solid;Flammable;Non-Flammable;Proper Shipping Name (Paragraph B of DOC);" +\
+                        "SegregationGroup;SetPoint;Stowage and segregation;Package Goods;Stowage Category").split(";")
+
+            # Create an empty DataFrame with the specified columns
+            df_DG_loadlist = pd.DataFrame(columns=DG_cols)
+            
         return df_DG_loadlist
 
 ## =======================================================================================================================        
@@ -1311,14 +1321,17 @@ class DG:
         return f_loadlist_exclusions
     
     def get_dg_exclusions(self, df_DG_loadlist:pd.DataFrame)->pd.DataFrame:
-        df_dg_exclusions = self.__extract_columns_for_exclusions(df_DG_loadlist)
-        df_dg_exclusions = self.__rename_df_exclusion_columns(df_dg_exclusions)
-        d_containers_exclusions = self.__get_d_containers_exclusions(df_dg_exclusions)
-        df_dg_exclusions = self.__transform_dg_exclusion_data(df_dg_exclusions)
-        df_dg_exclusions['DG_category'] = df_dg_exclusions.apply(self.__get_DG_category, axis=1)
-        d_containers_exclusions= self.__apply_exclusion_expansions(d_containers_exclusions, df_dg_exclusions)
-        df_exclusions = self.__construct_final_dg_exclusion(d_containers_exclusions)
-
+        if df_DG_loadlist.shape[0] != 0:
+            df_dg_exclusions = self.__extract_columns_for_exclusions(df_DG_loadlist)
+            df_dg_exclusions = self.__rename_df_exclusion_columns(df_dg_exclusions)
+            d_containers_exclusions = self.__get_d_containers_exclusions(df_dg_exclusions)
+            df_dg_exclusions = self.__transform_dg_exclusion_data(df_dg_exclusions)
+            df_dg_exclusions['DG_category'] = df_dg_exclusions.apply(self.__get_DG_category, axis=1)
+            d_containers_exclusions= self.__apply_exclusion_expansions(d_containers_exclusions, df_dg_exclusions)
+            df_exclusions = self.__construct_final_dg_exclusion(d_containers_exclusions)
+        else: 
+            DG_exclusion_cols = ['ContId', 'LoadPort', 'Bay', 'MacroTier']
+            df_exclusions = pd.DataFrame(columns=DG_exclusion_cols)
         return df_exclusions
 
 ## =======================================================================================================================        
@@ -1537,19 +1550,22 @@ class DG:
         
         return f_cg_exclusion_zones_nb_dg
     
-    def get_exclusion_zones(self, df_grouped_containers:pd.DataFrame, df_loadlist_exclusions:pd.DataFrame): 
-        d_container_2_container_group = self.__get_container_2_container_groups(df_grouped_containers)
-        d_stacks = self.__get_stacks_capacities()
-        d_bay_macro_tier_l_subbays = self.__get_bays_macro_tiers_l_subbays(d_stacks)
-        d_container_2_exclusion_zone = self.__create_exclusion_zone_mapping(df_loadlist_exclusions)
-        l_zones = self.__get_l_zones(d_container_2_exclusion_zone)
-        d_container_2_ix_exclusion_zone = self.__get_d_container_2_ix_exclusion_zone(d_container_2_exclusion_zone, l_zones)
-        d_cg_2_ix_exclusion_zones = self.__get_d_cg_2_ix_exclusion_zones(d_container_2_ix_exclusion_zone, d_container_2_container_group)
-        d_cg_2_combi_zones = self.__get_d_cg_2_combi_zones(d_cg_2_ix_exclusion_zones, l_zones)
-        d_cg_combi_subbays = self.__get_d_cg_combi_subbays(d_cg_2_combi_zones,d_bay_macro_tier_l_subbays)
-        df_cg_exclusion_zones = self.__get_f_cg_exclusion_zones(d_cg_combi_subbays)
-        df_cg_exclusion_zones_nb_dg = self.__get_f_cg_exclusion_zones_nb_dg(d_cg_combi_subbays)
-        
+    def get_exclusion_zones(self, df_grouped_containers:pd.DataFrame, df_loadlist_exclusions:pd.DataFrame):
+        if df_loadlist_exclusions.shape[0] != 0:
+            d_container_2_container_group = self.__get_container_2_container_groups(df_grouped_containers)
+            d_stacks = self.__get_stacks_capacities()
+            d_bay_macro_tier_l_subbays = self.__get_bays_macro_tiers_l_subbays(d_stacks)
+            d_container_2_exclusion_zone = self.__create_exclusion_zone_mapping(df_loadlist_exclusions)
+            l_zones = self.__get_l_zones(d_container_2_exclusion_zone)
+            d_container_2_ix_exclusion_zone = self.__get_d_container_2_ix_exclusion_zone(d_container_2_exclusion_zone, l_zones)
+            d_cg_2_ix_exclusion_zones = self.__get_d_cg_2_ix_exclusion_zones(d_container_2_ix_exclusion_zone, d_container_2_container_group)
+            d_cg_2_combi_zones = self.__get_d_cg_2_combi_zones(d_cg_2_ix_exclusion_zones, l_zones)
+            d_cg_combi_subbays = self.__get_d_cg_combi_subbays(d_cg_2_combi_zones,d_bay_macro_tier_l_subbays)
+            df_cg_exclusion_zones = self.__get_f_cg_exclusion_zones(d_cg_combi_subbays)
+            df_cg_exclusion_zones_nb_dg = self.__get_f_cg_exclusion_zones_nb_dg(d_cg_combi_subbays)
+        else: 
+            df_cg_exclusion_zones = pd.DataFrame(columns=['LoadPort','DischPort','Size','cType','cWeight','Height','idZone','Subbay'])
+            df_cg_exclusion_zones_nb_dg = pd.DataFrame(columns=['LoadPort','DischPort','Size','cType','cWeight','Height','idZone','NbDG'])
         return df_cg_exclusion_zones, df_cg_exclusion_zones_nb_dg
 
 
