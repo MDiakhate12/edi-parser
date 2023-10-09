@@ -42,6 +42,8 @@ class LashingGetter():
     def getValues(self):
         # Calculation of various values based on inputs
         ## setting self.speed to Design speed in case of Unrestricted
+        
+        self.speed = max(self.speed,18.1)
         self.speed = self.DS if self.lashing_config == 'UNRESTRICTED' else self.speed
         
         self.__F = 0.164 * self.speed / math.sqrt(self.__Lpp)  # Froude's number F=0.212 (Pt B, Ch 5, Symbols)
@@ -427,7 +429,6 @@ class Lashing():
 
     def __lashing_calculations(self, call_0_dataframe:pd.DataFrame, POD_0:str) -> pd.DataFrame:    
         
-        
         # vessel.display_info()
         # open containers file call_00_00 
         # path = r'C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\git_repos\OptiStow_lambda_func_local\vas-data\service_input_output\data\simulations\testscript_03-04-2023-Baptisite-02\intermediate\00_THLCH_container.csv'
@@ -593,6 +594,7 @@ class Lashing():
             
             lashing = LashingGetter(self._speed, self._gm, self._draft, self._lashing_calculations)
             lashing_dict = lashing.getValues()
+            
             # self._logger.info(f" Lashing Calculation Parameters: {lashing_dict}")
             # get exterior rows per bay
             exterior_rows_per_bay = self._vessel.get_max_rows_per_bay()
