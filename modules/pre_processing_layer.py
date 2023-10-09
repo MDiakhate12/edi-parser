@@ -292,32 +292,34 @@ class PreProcessingLayer():
     def get_df_DG_classes_grouped(self, df_DG_LoadList: pd.DataFrame, df_DG_classes_expanded: pd.DataFrame) -> pd.DataFrame:
         df_DG_classes_filtered = self.__get_df_DG_classes_filtered(df_DG_LoadList, df_DG_classes_expanded)
         df_DG_classes_filtered = df_DG_classes_filtered.astype(str)
+        try:
+            d_rows_as_dicts = df_DG_classes_filtered.to_dict(orient="dict")
+            l_d_rows = []
+            l_rows_keys = []
+            for k in d_rows_as_dicts.keys():
+                d_row = d_rows_as_dicts[k]
+
+                if d_row not in l_d_rows:
+                    l_d_rows.append(d_row)
+                    l_rows_keys.append(k)
+
+                else:
+
+                    d_row_idx_in_list = l_d_rows.index(d_row)
+                    old_k = l_rows_keys[d_row_idx_in_list]
+                    new_k = f"{old_k},{k}"
+                    l_rows_keys[d_row_idx_in_list] = new_k
+
+            d_rows_as_dicts_grouped = {}
+            for k, row in list(zip(l_rows_keys, l_d_rows)):
+                d_rows_as_dicts_grouped[k] = row
+            df_grouped = pd.DataFrame(d_rows_as_dicts_grouped)
+            df_grouped.drop_duplicates(inplace=True)
+            df_grouped.index = df_grouped.columns
+            return df_grouped
         
-        d_rows_as_dicts = df_DG_classes_filtered.to_dict(orient="dict")
-        l_d_rows = []
-        l_rows_keys = []
-        for k in d_rows_as_dicts.keys():
-            d_row = d_rows_as_dicts[k]
-
-            if d_row not in l_d_rows:
-                l_d_rows.append(d_row)
-                l_rows_keys.append(k)
-
-            else:
-
-                d_row_idx_in_list = l_d_rows.index(d_row)
-                old_k = l_rows_keys[d_row_idx_in_list]
-                new_k = f"{old_k},{k}"
-                l_rows_keys[d_row_idx_in_list] = new_k
-
-        d_rows_as_dicts_grouped = {}
-        for k, row in list(zip(l_rows_keys, l_d_rows)):
-            d_rows_as_dicts_grouped[k] = row
-        df_grouped = pd.DataFrame(d_rows_as_dicts_grouped)
-        df_grouped.drop_duplicates(inplace=True)
-
-        df_grouped.index = df_grouped.columns
-        return df_grouped
+        except: 
+            return df_DG_classes_filtered
 
     def get_df_DG_classes_grouped_to_save(self, df_grouped: pd.DataFrame) -> pd.DataFrame:
         df_grouped_to_save = df_grouped.copy()
