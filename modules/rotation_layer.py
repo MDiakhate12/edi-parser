@@ -21,6 +21,22 @@ class rotation():
         self.__rotation_csv_map = rotation_csv_map
         self.l_ports_names = [self.d_seq_num_to_port_name[i] for i in range(self.ports_count)]
 
+    
+    def __increment_port_number(self, rotation_intermediate_df: pd.DataFrame)->None:
+        port_counts = {}
+        
+        def helper(port):
+            if port not in port_counts:
+                port_counts[port] = 1
+                return port
+            else:
+                port_counts[port] += 1
+                return f"{port}{port_counts[port]}"
+        
+        rotation_intermediate_df['ShortName'] = rotation_intermediate_df['ShortName'].apply(helper)
+
+        
+
     def __process_df_intermediate_rotation(self) -> dict:
         
         self.rotations_intermediate['worldwide'].fillna(self.rotations_intermediate['worldwide'][0], inplace=True)
@@ -34,6 +50,9 @@ class rotation():
         self.rotations_intermediate[int_cols] = self.rotations_intermediate[int_cols].astype(int)
 
         self.rotations_intermediate["nb_moves_calc"] = 0 # this is for calculating the number of moves required for each port
+        
+        self.__increment_port_number(self.rotations_intermediate)
+
         l_records = self.rotations_intermediate.to_dict(orient="records")
         d_rotation = { record["ShortName"]: record for record in l_records }
         
@@ -332,7 +351,7 @@ class rotation():
                     # Update the 'ShortName' field in the second dictionary with the port_name
                     d_rotation[port_key]['ShortName'] = port_name
                     break    
-
+                      
         port_names = list(d_rotation.keys())
         for port_name in port_names:
             
