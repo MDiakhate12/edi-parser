@@ -5,6 +5,7 @@ from modules.common_helpers import nearest_neighbor_interpolation, get_datetime_
 import datetime 
 
 class rotation():
+
     def __init__(self, logger: logging.Logger, vessel: object, rotation_intermediate: pd.DataFrame, l_dfs_containers_POL_POD: pd.DataFrame, l_containers_folder_names:list, d_seq_num_to_port_name: dict, rotation_csv_map: dict, df_shifting_rates:pd.DataFrame, consumption_df:pd.DataFrame, fuel_data_dict: dict) -> None:
         self.logger = logger
         self.__vessel_id = vessel.get_imo()
@@ -20,8 +21,7 @@ class rotation():
         self.ports_count = len(self.d_seq_num_to_port_name)
         self.__rotation_csv_map = rotation_csv_map
         self.l_ports_names = [self.d_seq_num_to_port_name[i] for i in range(self.ports_count)]
-
-    
+ 
     def __increment_port_number(self, rotation_intermediate_df: pd.DataFrame)->None:
         port_counts = {}
         
@@ -34,8 +34,6 @@ class rotation():
                 return f"{port}{port_counts[port]}"
         
         rotation_intermediate_df['ShortName'] = rotation_intermediate_df['ShortName'].apply(helper)
-
-        
 
     def __process_df_intermediate_rotation(self) -> dict:
         
@@ -57,7 +55,6 @@ class rotation():
         d_rotation = { record["ShortName"]: record for record in l_records }
         
         return d_rotation
-    
     
     def __map_d_rotation_to_seq_num_port_name(self, d_rotation:dict) -> dict: 
             updated_dict2 = {}
@@ -109,7 +106,6 @@ class rotation():
             except: 
                 d_rotation[next_port_name]["nb_moves_calc"] += 0
         return d_rotation
-    
     
     def __add_num_moves_to_d_rotation_from_proforma(self, d_rotation: dict, port_name: str, port_num: int) -> None:
         if port_num != 0:
@@ -183,7 +179,6 @@ class rotation():
         interpolated_consumption = nearest_neighbor_interpolation(sample_points, points, consumption, 3)
         d_rotation[port_name][target_key] = interpolated_consumption[0]
     
-
     def __get_time_vars_for_d_rotation(
         self,
         d_rotation: dict,
@@ -206,7 +201,10 @@ class rotation():
         speed_single = float(d_rotation[port_name]["SpeedSingle"])
         nb_moves = float(d_rotation[port_name]["nb_moves_calc"])
         proforma_cranes_num = float(d_rotation[port_name]["NbCranesProforma"])
-        
+        if proforma_cranes_num == opt_cranes_num:
+            opt_cranes_num += 1
+            d_rotation[port_name]["NbCranes"] = opt_cranes_num
+
         time_max = nb_moves / (proforma_cranes_num * speed_single)
         time_max_rounded = round(time_max, 2)
         time_min = nb_moves / (opt_cranes_num * speed_single)
@@ -214,7 +212,6 @@ class rotation():
         
         return time_diff_days, time_diff_hours, time_min_rounded, time_max_rounded
     
-
     def __get_speed_min_and_max(
             self,
             port_name: str,
@@ -226,7 +223,6 @@ class rotation():
 
         distance_to_next = d_rotation[port_name]["DistToNext"]
         time_max_min_diff_hours = time_max - time_min
-        
         speed_min_temp = distance_to_next / (time_diff_hours + time_max_min_diff_hours)
         speed_min = max([8, speed_min_temp])
         speed_min_rounded = round(speed_min, 2)
@@ -238,8 +234,6 @@ class rotation():
         d_rotation[port_name]["speed_max"] = speed_max_rounded
         d_rotation[port_name]["speed_min"] = speed_min_rounded
        
-
-    
     def __calculate_fuel_consumption_plan_and_price(self, d_rotation: dict, port_name: str)->None:
     # Define the distances for maneuvering and long leg (in Nm)
         maneuvering_distance = min(0.05 * d_rotation[port_name]["DistToNext"], 100)
@@ -291,8 +285,7 @@ class rotation():
         weighted_average_cost = total_weighted_cost / sum(percentage_fuel_plan.values())
         
         d_rotation[port_name]['FuelCost'] = weighted_average_cost
-        
-                    
+                   
     def __add_hourly_cost_to_d_rotation(
             self,
             d_rotation: dict,
@@ -302,25 +295,22 @@ class rotation():
         time_diff_days, time_diff_hours, time_min, time_max = self.__get_time_vars_for_d_rotation(d_rotation, port_name)
         self.__get_speed_min_and_max(port_name, d_rotation, time_diff_hours, time_min, time_max)
         self.__calculate_fuel_consumption_plan_and_price(d_rotation, port_name)
-        cons_per_hour_at_v_min = self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "speed_min", "cons_per_hour_at_v_min")
-        cons_per_hour_at_v_max = self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "speed_max", "cons_per_hour_at_v_max")
+        self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "speed_min", "cons_per_hour_at_v_min")
+        self.__add_fuel_cons_to_d_rotation(d_rotation, port_name, "speed_max", "cons_per_hour_at_v_max")
+        
         cons_per_hour_at_v_min = d_rotation[port_name]["cons_per_hour_at_v_min"]
         cons_per_hour_at_v_max = d_rotation[port_name]["cons_per_hour_at_v_max"]
-
+              
         total_potential_fuel_gain = (cons_per_hour_at_v_max - cons_per_hour_at_v_min) * (time_diff_days.total_seconds() / 86400)
         total_potential_fuel_gain_rounded = round(total_potential_fuel_gain, 2)
-
         fuel_cost_per_ton = d_rotation[port_name]["FuelCost"]
-
         try:
             hourly_cost = (total_potential_fuel_gain_rounded / ((time_max - time_min)) * fuel_cost_per_ton) if time_min != time_max else 0
             hourly_cost_rounded = round(hourly_cost, 2)
         except:
             hourly_cost_rounded = 0
-
         d_rotation[port_name]["HourlyCost"] = hourly_cost_rounded   
-        
-        
+          
     def get_rotations_final(self) -> None:
         
         d_rotation = self.__process_df_intermediate_rotation()

@@ -8,7 +8,7 @@ if "" in DEFAULT_MISSING:
 
 import logging
 
-# Create a console handler
+# # Create a console handler
 # console_handler = logging.StreamHandler()
 # console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -391,8 +391,8 @@ class MainLayer():
        
         l_baplie_segments, new_data_flag, baplie_type_from_file_name, baplie_type_from_content = \
             self.__DL.read_baplie_body_as_list(baplie_path, call_id, file_type, s3_bucket)
-        # if file_type in ['OnBoard', 'LoadList']:
-        #     self.__AL.check_missing_new_container_header(l_baplie_segments, call_id, file_type)
+        if file_type in ['OnBoard', 'LoadList']:
+            self.__AL.check_missing_new_container_header(l_baplie_segments, call_id, file_type)
             
         if baplie_type_from_file_name is None:
             return None, None, None
@@ -678,14 +678,37 @@ class MainLayer():
         filled_tanks_csv_path  = f"{self.__py_scripts_out_dir}/{filled_tanks_csv_name}"
         self.__DL.write_csv(df_filled_subtanks, filled_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
+    def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
+        # read baplies already existing from webapp
+        l_baplies_webapp_filepaths, l_POD_profile = [], []
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+            baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+            for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                if file_name in ['LoadList.edi', 'OnBoard.edi']:
+                    file_name_path = f"{baplies_dir}/{file_name}"
+                    l_baplies_webapp_filepaths.append(file_name_path)     
+
+        for baplie_path in l_baplies_webapp_filepaths:
+            folder_name = self.__DL.get_folder_name_from_path(baplie_path)
+            file_name = self.__DL.get_file_name_from_path(baplie_path)
+            folder_name_split = folder_name.split("_")
+            call_id = "_".join(folder_name_split[-2:])
+
+            df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
+            self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
+            l_POD_in_edi = df_attributes['LOC_11_LOCATION_ID'].unique()
+            l_POD_profile.extend([attribute for attribute in l_POD_in_edi if attribute not in l_POD_profile and attribute != ''])
+        return l_POD_profile
+    
     def __run_first_execution(self) -> None:
-        
+
+        # get csv headers dict, list, and prefixes list present in the Baplie message
+        d_csv_cols_to_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_cols_segments_map.json", s3_bucket=self.__s3_bucket_in)
+        d_main_to_sub_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/main_sub_segments_map.json", s3_bucket=self.__s3_bucket_in)
         # iso codes sizes and heights map (to check iso codes)
         self.logger.info("Reading iso_code_map from referential configuration folder...")
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
-        
         # Add Rotations before (identify (gm, std speed , draft and service line from rotation intermediate ))
-        
         self.logger.info("*" * 80)
         self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
         rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
@@ -693,8 +716,10 @@ class MainLayer():
         RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in, sep=";")
         self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
-        
-        # rotation_intermediate = rotation_intermediate.iloc[:len(self.__d_seq_num_to_port_name)-1]
+
+        l_POD_profile = self.__get_pod_from_baplies_uploaded(d_csv_cols_to_segments_map, d_main_to_sub_segments_map)  
+        last_index_in_rotations = rotation_intermediate[rotation_intermediate['ShortName'].isin(l_POD_profile)].index.max()
+        rotation_intermediate = rotation_intermediate.iloc[:(last_index_in_rotations + 1)]
         self.logger.info("Reading consumption csv file from referential vessels folder...")
         consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
         self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")
@@ -785,7 +810,6 @@ class MainLayer():
             folder_name_split = folder_name.split("_")
             call_id = "_".join(folder_name_split[-2:])
             file_type = file_name.split(".")[0]
-
             self.logger.info(f"Reading {file_name} from {folder_name}...")
 
             # get csv headers dict, list, and prefixes list present in the Baplie message
@@ -793,7 +817,7 @@ class MainLayer():
             d_main_to_sub_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/main_sub_segments_map.json", s3_bucket=self.__s3_bucket_in)
 
             df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
-
+        
             self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
 
             if baplie_type_from_file_name == baplie_type_from_content:
