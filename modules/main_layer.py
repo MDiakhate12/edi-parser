@@ -1123,7 +1123,7 @@ class MainLayer():
             df = self.__PL.process_slots(df, 1, True)
             l_containers_ids_temp = df["EQD_ID"].tolist()   
             l_containers_ids += l_containers_ids_temp
-
+   
         containers_data_list = []
         for i, path in enumerate(self.__l_POL_POD_containers_baplies_paths):
             folder_name = self.__DL.get_folder_name_from_path(path)
@@ -1188,7 +1188,6 @@ class MainLayer():
                                     first_segment_joined = "+".join(first_segment_split)
                                     segments_list_no_header_no_dups[0] = first_segment_joined
 
-                        #TODO investigate issue
                         if container_id in l_containers_ids and POD_name != self.__target_port:
                             containers_data_list += segments_list_no_header_no_dups
                             containers_count += 1

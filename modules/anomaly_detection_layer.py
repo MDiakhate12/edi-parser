@@ -154,8 +154,8 @@ class AnomalyDetectionLayer():
         for i, container_id in enumerate(l_containers_ids):
             if container_id != container_id or container_id == "":
                 no_id_container_count += 1
-                l_containers_ids[i] = f"{call_id}_CN_{no_id_container_count}"
-                # print(l_containers_ids[i])
+                l_containers_ids[i] = "STOW" + ''.join(random.choices( string.digits, k=7))
+                # l_containers_ids[i] = f"{call_id}_CN_{no_id_container_count}"
         if no_id_container_count:
             criticity = "Warning"
             message = self.__get_full_msg("with a missing serial number")

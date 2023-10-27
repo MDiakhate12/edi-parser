@@ -650,6 +650,21 @@ class DG:
         df_DG_loadlist.reset_index(inplace=True, drop=True)
         return df_DG_loadlist
 
+    def __handle_missing_sw1_class_3(self, df_DG_loadlist: pd.DataFrame): 
+        def update_stowage(row):
+            # Check the conditions
+            if (row['Class'] == "3" or row['SubLabel1'] == "3" or row['SubLabel2'] == "3") and (row['PGr'] in ['I', 'II']) and ('SW1' not in row['Stowage and segregation']):
+                if row['Stowage and segregation'] == "":
+                    return 'SW1'
+                else:
+                    return 'SW1' + ", " + row['Stowage and segregation']
+            else:
+                return row['Stowage and segregation']
+
+
+        df_DG_loadlist['Stowage and segregation'] = df_DG_loadlist.apply(update_stowage, axis=1)    
+        return None
+
     def get_df_dg_loadlist(self, df_all_containers:pd.DataFrame) -> pd.DataFrame:
         df_DG_loadlist = self.__get_df_DG_loadlist_exhaustive(df_all_containers)
         if df_DG_loadlist.shape[0] != 0:
@@ -667,6 +682,7 @@ class DG:
             self.__get_non_flammable_state(df_DG_loadlist)
             self.__get_zone_port(df_DG_loadlist)
             self.__get_loading_remarks(df_DG_loadlist)
+            self.__handle_missing_sw1_class_3(df_DG_loadlist)
             df_DG_loadlist = self.__add_not_permitted_bay_column(df_DG_loadlist)
             df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
         else: 
