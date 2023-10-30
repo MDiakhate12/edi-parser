@@ -2310,10 +2310,10 @@ class PreProcessingLayer():
             dg_cols.append(dg_kco_col)
 
         
-        df_copy = df_dg_loadlist[["Serial Number", "POL", "POD", "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)"]]
+        df_copy = df_dg_loadlist[["Serial Number", "POL", "POD", "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)", "Stowage and segregation"]]
         df_dg_ll = df_copy.copy()
-        df_dg_ll.rename(columns={"DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)": "DG-Remark"}, inplace = True)
-
+        df_dg_ll.rename(columns={"Stowage and segregation": "DG-Remark"}, inplace = True)
+        # df_dg_ll.rename(columns={"DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)": "DG-Remark"}, inplace = True)
         dg_remark_dict = {}
         for index, row in df_dg_ll.iterrows():
             rowid = (row["Serial Number"], row["POL"])
@@ -2334,12 +2334,12 @@ class PreProcessingLayer():
         
         df_dg = df_combined[dg_cols].copy()
         #df_dg.drop_duplicates(subset=["EQD_ID", "LOC_9_LOCATION_ID"], inplace=True)
-        df_dg["cDG"] = [ get_dg_class(row) for (_, row) in df_dg.iterrows() ]
-
-        reg_sw_1 = re.compile("SW1\ ")
+        df_dg["cDG"] = [ get_dg_class(row) for (_, row) in df_dg.iterrows()]
+        reg_sw_1 = re.compile(r"SW1,?")
         reg_sw_2 = re.compile("SW1$")
-        def match_sw1(s): return reg_sw_1.match(s) or reg_sw_2.match(s)
-
+        reg_sw_3 = re.compile("SW1\ ")
+        def match_sw1(s): return reg_sw_1.match(s) or reg_sw_2.match(s) or reg_sw_3.match(s)
+        
         def match_sw1_cols(r): return bool(any([match_sw1(str(r[col])) for col in dg_free_txt_cols]))
 
         def match_sw1_dict(r):
@@ -2353,8 +2353,8 @@ class PreProcessingLayer():
                 s = str(r[dg_kco_col])
                 return bool(any([reg_kc.match(s), reg_kco.match(s)]))
             return False
-
-        df_dg["DGheated"] = [ int(any([match_sw1_cols(row), match_kco(row), match_sw1_dict(row)])) for (_, row) in df_dg.iterrows() ]
+        
+        df_dg["DGheated"] = [ int(any([match_sw1_cols(row), match_kco(row), match_sw1_dict(row)])) for (_, row) in df_dg.iterrows()]
 
         df_dg = df_dg[["EQD_ID", "LOC_9_LOCATION_ID", "cDG", "DGheated"]]#.rename({"EQD_ID":"Container", "LOC_9_LOCATION_ID":"LoadPort"})
 

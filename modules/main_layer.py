@@ -1,23 +1,7 @@
 import pandas as pd
-import numpy as np 
+import numpy as np
 import re
-
-DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
-if "" in DEFAULT_MISSING:
-    DEFAULT_MISSING = DEFAULT_MISSING.remove("")
-
 import logging
-
-# # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
-
-
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
 from modules.mapping_layer import MappingLayer as ML
@@ -29,6 +13,20 @@ from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
 from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
+
+DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
+if "" in DEFAULT_MISSING:
+    DEFAULT_MISSING = DEFAULT_MISSING.remove("")
+
+
+# # Create a console handler
+# console_handler = logging.StreamHandler()
+# console_handler.setLevel(logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# # Set the formatter for the console handler
+# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# console_handler.setFormatter(console_formatter)
 
 class MainLayer():
     def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket_out: str="", s3_bucket_in: str="") -> None:
@@ -68,10 +66,10 @@ class MainLayer():
         # copy files from origin to in_preprocessing folder
         self.__copy_webapp_input_into_in_preprocessing()
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
-    
+
         # intialize mapping layer
         self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
-        
+
         # initialize processing layer
         self.__PL = PL()
 
@@ -104,7 +102,7 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = f"{self.__static_in_dir}/costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  f"{self.__static_in_dir}/costs/fuelCosts.csv"
             self.__consumption = f"{self.__static_in_dir}/schedules_temp/conso_apiPreVsProdVsInterp.csv"
-            
+
         else:
             bucket_path = f"s3://{s3_bucket}"
             simulation_dir = f"{simulation_id}"
@@ -116,18 +114,15 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = "costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  "costs/fuelCosts.csv"
             self.__consumption = "schedules_temp/conso_apiPreVsProdVsInterp.csv"
-        
-        self.__dynamic_in_origin_dir = f"{simulation_dir}/in"    
-        self.__dynamic_in_dir = f"{simulation_dir}/in_preprocessing"   
-        # self.__dynamic_in_dir = f"{simulation_dir}/in"
+
+        self.__dynamic_in_origin_dir = f"{simulation_dir}/in"
+        self.__dynamic_in_dir = f"{simulation_dir}/in_preprocessing" 
         self.__py_scripts_out_dir = f"{simulation_dir}/intermediate"
-        
         self.__all_containers_csv_path = f"{self.__py_scripts_out_dir}/csv_combined_containers.csv"
         self.__rotation_intermediate_path = f"{self.__dynamic_in_dir}/rotation.csv"
-        
         self.__cplex_out_dir = f"{simulation_dir}/out"
         self.__error_log_path = f"{self.__cplex_out_dir}/error.txt"
-       
+
     def __get_first_two_ports_baplie_and_csv_paths(self, baplies_dir: str, file_name: str, folder_name: str) -> None:
         """
         Gets the baplies paths of the first and second ports and get the csv (converted from the baplie) paths for those two ports.
@@ -688,16 +683,17 @@ class MainLayer():
     def __copy_webapp_input_into_in_preprocessing(self):
         # read baplies already existing from webapp
         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
-            baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/"
-            baplies_destination_dir = f"{self.__dynamic_in_dir}/{folder_name}/"
+            baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_origin_dir}/{folder_name}"
+            baplies_destination_dir = f"{self.__dynamic_in_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_dir}/{folder_name}"
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
-                source_key = f"{baplies_dir}{file_name}"
+                source_key = f"{baplies_dir}{file_name}" if self.__s3_bucket_out == "" else f"{baplies_dir}/{file_name}"
                 self.__DL.copy_file(source_key, baplies_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, file_name)
         # also copy rotation.csv
         rotation_csv_dir = f"{self.__dynamic_in_origin_dir}/rotation.csv"
         rotation_csv_destination_dir = f"{self.__dynamic_in_dir}"
         self.__DL.copy_file(rotation_csv_dir, rotation_csv_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "rotation.csv")
 
+ 
     def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
         # read baplies already existing from webapp
         l_baplies_webapp_filepaths, l_POD_profile = [], []
