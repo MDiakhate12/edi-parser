@@ -23,7 +23,7 @@ class worst_case_baplies():
         self.__simulation_input = simulation_input_path
         self.__s3_bucket_ref = s3_bucket_ref
         self.__s3_bucket_out = s3_bucket_out
-        self._DL = DL(logger, self.__s3_bucket_out, self.__s3_bucket_ref)
+        self._DL = DL(self.logger, self.__s3_bucket_out, self.__s3_bucket_ref)
         self._AL = AL
 
 
@@ -95,7 +95,6 @@ class worst_case_baplies():
     # find missing port calls
     def _find_missing_port_calls(self, ref_port_index_list:list, referential_folder_name:list):
         missing_port_calls = []
-        print(ref_port_index_list)
         ref_port_index_list = [x for x in ref_port_index_list if x is not None]
         if max(ref_port_index_list) == ref_port_index_list[-1]:
             # find the range of numbers to check
@@ -296,7 +295,7 @@ class worst_case_baplies():
                         if filename in ["LoadList.edi"]:
                             file_dir = os.path.join(source_key, filename)
                             
-                            self._DL.copy_file_loadlist(file_dir, destination_key, self.__s3_bucket_ref, self.__s3_bucket_out)
+                            self._DL.copy_file(file_dir, destination_key, self.__s3_bucket_ref, self.__s3_bucket_out)
 
     def replace_location(self, data: list, replacements: list) -> None:
         """

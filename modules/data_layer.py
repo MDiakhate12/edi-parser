@@ -171,14 +171,32 @@ class DataLayer():
 
         return folders_list
     
-    def copy_file_loadlist(self, source_key:str, destination_key:str, source_bucket_name:str="", destination_bucket_name:str="") -> None:
+    def clear_folder(self, destination_key: str, destination_bucket_name: str = ""):
+        if self.__is_local:
+            # For local, delete the entire folder and recreate it
+            destination_folder = os.path.join(destination_bucket_name, destination_key)
+            if os.path.exists(destination_folder):
+                shutil.rmtree(destination_folder)
+            os.makedirs(destination_folder)
+        else:
+            # For AWS S3, delete all objects (including objects in subfolders) in the folder
+            s3 = boto3.client('s3')
+            objects_to_delete = s3.list_objects_v2(Bucket=destination_bucket_name, Prefix=destination_key)
+            if 'Contents' in objects_to_delete:
+                delete_keys = [{'Key': obj['Key']} for obj in objects_to_delete['Contents']]
+                s3.delete_objects(Bucket=destination_bucket_name, Delete={'Objects': delete_keys})
+
+    def copy_file(self, source_key:str, destination_key:str, source_bucket_name:str="", destination_bucket_name:str="", file_name:str="LoadList.edi") -> None:
         if self.__is_local:
             # Copy the file locally
+            # Create the destination directory if it doesn't exist
+            os.makedirs(destination_key, exist_ok=True)
+
             source_file = os.path.join(source_bucket_name, source_key)
-            destination_file = os.path.join(destination_bucket_name, destination_key)
+            destination_file = os.path.join(destination_bucket_name, destination_key, file_name)
             shutil.copy(source_file, destination_file)
         else:
-            destination_key = os.path.join(destination_key, "LoadList.edi")
+            destination_key = os.path.join(destination_key, file_name)
             # Copy the file from S3 to S3
             s3 = boto3.client('s3')
             copy_source = {

@@ -61,7 +61,12 @@ class MainLayer():
         # folder name params
         #check for correctness of files 
         logger.info("before __init_params_from_folders_names")
-        
+        # clear previous simulation folders
+        self.__DL.clear_folder(self.__dynamic_in_dir, self.__s3_bucket_out)
+        self.__DL.clear_folder(self.__py_scripts_out_dir, self.__s3_bucket_out)
+        self.__DL.clear_folder(self.__cplex_out_dir, self.__s3_bucket_out)
+        # copy files from origin to in_preprocessing folder
+        self.__copy_webapp_input_into_in_preprocessing()
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
     
         # intialize mapping layer
@@ -111,8 +116,10 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = "costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  "costs/fuelCosts.csv"
             self.__consumption = "schedules_temp/conso_apiPreVsProdVsInterp.csv"
-            
-        self.__dynamic_in_dir = f"{simulation_dir}/in"
+        
+        self.__dynamic_in_origin_dir = f"{simulation_dir}/in"    
+        self.__dynamic_in_dir = f"{simulation_dir}/in_preprocessing"   
+        # self.__dynamic_in_dir = f"{simulation_dir}/in"
         self.__py_scripts_out_dir = f"{simulation_dir}/intermediate"
         
         self.__all_containers_csv_path = f"{self.__py_scripts_out_dir}/csv_combined_containers.csv"
@@ -678,6 +685,19 @@ class MainLayer():
         filled_tanks_csv_path  = f"{self.__py_scripts_out_dir}/{filled_tanks_csv_name}"
         self.__DL.write_csv(df_filled_subtanks, filled_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
+    def __copy_webapp_input_into_in_preprocessing(self):
+        # read baplies already existing from webapp
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
+            baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/"
+            baplies_destination_dir = f"{self.__dynamic_in_dir}/{folder_name}/"
+            for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                source_key = f"{baplies_dir}{file_name}"
+                self.__DL.copy_file(source_key, baplies_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, file_name)
+        # also copy rotation.csv
+        rotation_csv_dir = f"{self.__dynamic_in_origin_dir}/rotation.csv"
+        rotation_csv_destination_dir = f"{self.__dynamic_in_dir}"
+        self.__DL.copy_file(rotation_csv_dir, rotation_csv_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "rotation.csv")
+
     def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
         # read baplies already existing from webapp
         l_baplies_webapp_filepaths, l_POD_profile = [], []
@@ -708,6 +728,7 @@ class MainLayer():
         # iso codes sizes and heights map (to check iso codes)
         self.logger.info("Reading iso_code_map from referential configuration folder...")
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
+
         # Add Rotations before (identify (gm, std speed , draft and service line from rotation intermediate ))
         self.logger.info("*" * 80)
         self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
