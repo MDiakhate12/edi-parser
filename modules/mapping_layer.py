@@ -829,7 +829,6 @@ class MappingLayer():
                 #     l_err_container_ids.append(container_id)
 
             l_mapped_PODs_names.append(mapped_POD_name)
-
         df["LOC_11_LOCATION_ID"] = l_mapped_PODs_names
         
         return df #, l_err_container_ids

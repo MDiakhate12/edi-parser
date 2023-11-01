@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import re
 import logging
+import random
+import string
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
 from modules.mapping_layer import MappingLayer as ML
@@ -19,14 +21,14 @@ if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
 
 
-# # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# Create a console handler
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
+# Set the formatter for the console handler
+console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console_handler.setFormatter(console_formatter)
 
 class MainLayer():
     def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket_out: str="", s3_bucket_in: str="") -> None:
@@ -65,6 +67,7 @@ class MainLayer():
         self.__DL.clear_folder(self.__cplex_out_dir, self.__s3_bucket_out)
         # copy files from origin to in_preprocessing folder
         self.__copy_webapp_input_into_in_preprocessing()
+        self.__handle_anomaly_containers_ids_in_baplies()
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
 
         # intialize mapping layer
@@ -393,12 +396,13 @@ class MainLayer():
        
         l_baplie_segments, new_data_flag, baplie_type_from_file_name, baplie_type_from_content = \
             self.__DL.read_baplie_body_as_list(baplie_path, call_id, file_type, s3_bucket)
+
+        if baplie_type_from_file_name is None:
+            return None, None, None
+        
         if file_type in ['OnBoard', 'LoadList']:
             self.__AL.check_missing_new_container_header(l_baplie_segments, call_id, file_type)
             
-        if baplie_type_from_file_name is None:
-            return None, None, None
-
         new_data_flag_in_baplie = new_data_flag.replace("_", "+")
         self.logger.info(f"New data for a {baplie_type_from_file_name} starts at: {new_data_flag_in_baplie}...")
         self.logger.info(f"There are {len(l_baplie_segments)} {baplie_type_from_file_name}s in this file...")
@@ -653,7 +657,7 @@ class MainLayer():
             
             
         return l_filled_tanks_ports
-    
+
     def __output_filled_subtanks(self, l_tanks_baplies_paths: list) -> None:
         d_tanks_basic_infos = self.__get_tanks_basic_infos()
 
@@ -681,6 +685,7 @@ class MainLayer():
         self.__DL.write_csv(df_filled_subtanks, filled_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
     def __copy_webapp_input_into_in_preprocessing(self):
+
         # read baplies already existing from webapp
         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
             baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_origin_dir}/{folder_name}"
@@ -688,38 +693,98 @@ class MainLayer():
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                 source_key = f"{baplies_dir}{file_name}" if self.__s3_bucket_out == "" else f"{baplies_dir}/{file_name}"
                 self.__DL.copy_file(source_key, baplies_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, file_name)
+
         # also copy rotation.csv
         rotation_csv_dir = f"{self.__dynamic_in_origin_dir}/rotation.csv"
         rotation_csv_destination_dir = f"{self.__dynamic_in_dir}"
         self.__DL.copy_file(rotation_csv_dir, rotation_csv_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "rotation.csv")
 
- 
+    def __handle_anomaly_containers_ids_in_baplies(self):
+        EQD_pattern = r'EQD\+CN\+.*'
+        # read baplies already existing from webapp
+        seen_values = set()
+        generated_values = set()
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
+            baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_dir}/{folder_name}"
+            for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                #start of file handling for missing EQD or duplicates
+                if file_name in ["LoadList.edi", "OnBoard.edi"]:
+                    baplies_path = f"{baplies_dir}{file_name}" if self.__s3_bucket_out == "" else f"{baplies_dir}/{file_name}"
+                    baplie_segments =self.__DL.read_baplie_as_list(baplies_path, self.__s3_bucket_out)
+                    # Create a set to keep track of seen xxxxxxxx values and their positions
+                    
+                    modified_flag = False
+                    for i, element in enumerate(baplie_segments):
+                        match = re.search(EQD_pattern, element)
+                        if match:
+                            modified_flag = True
+                            container_id = match.group(0).split('+')[2].split(':')[0]
+                            # Check for empty string or repeated values
+                            if container_id == '' or container_id in seen_values:
+                                # Replace with "STOW" + 7 random digits
+                                container_segment = baplie_segments[i].split('+')
+                                old_container_id_segment = container_segment[2].split(':')
+                                new_value = None
+                                while new_value in generated_values or new_value is None:
+                                    new_value = "STOW" + ''.join(random.choices(string.digits, k=7))
+                                generated_values.add(new_value)
+                                old_container_id_segment[0] = new_value
+                                container_segment[2] = ":".join(old_container_id_segment)
+                                baplie_segments[i] = "+".join(container_segment)   
+                            else:
+                                seen_values.add(container_id)
+
+                    if modified_flag:
+                        final_baplie = "'".join(baplie_segments)
+                        destination_path = f"{self.__dynamic_in_dir}/{folder_name}/{file_name}"
+                    self.__DL.write_file(final_baplie, destination_path, self.__s3_bucket_out)
+
     def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
         # read baplies already existing from webapp
-        l_baplies_webapp_filepaths, l_POD_profile = [], []
-        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+        l_baplies_webapp_filepaths, l_POD_profile, l_port_calls = [], [], []
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))):
             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+            l_port_calls.append(folder_name[-5:])
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                 if file_name in ['LoadList.edi', 'OnBoard.edi']:
                     file_name_path = f"{baplies_dir}/{file_name}"
-                    l_baplies_webapp_filepaths.append(file_name_path)     
+                    l_baplies_webapp_filepaths.append(file_name_path)
 
-        for baplie_path in l_baplies_webapp_filepaths:
+        for j, baplie_path in enumerate(l_baplies_webapp_filepaths):
             folder_name = self.__DL.get_folder_name_from_path(baplie_path)
             file_name = self.__DL.get_file_name_from_path(baplie_path)
             folder_name_split = folder_name.split("_")
             call_id = "_".join(folder_name_split[-2:])
+            self.logger.info(f"Reading {file_name} from {folder_name}...")
+            df_attributes_rot, baplie_type_from_file_name_rot, baplie_type_from_content_rot = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
+            self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name_rot, baplie_type_from_content_rot, call_id)
+            try:
+                l_POD_in_edi = df_attributes_rot['LOC_11_LOCATION_ID'].unique()
+            except TypeError:
+                 l_POD_in_edi = []
+                 
+            element_counts = {}
+            for i in range(len(l_POD_in_edi)):
+                port = l_POD_in_edi[i]
+                if port in l_port_calls[1:j+1]:
+                    element_counts[port] = l_port_calls[1:i+1].count(port)
+                    l_POD_in_edi[i] = f"{port}{element_counts[port]}"
+                elif port in element_counts:
+                    element_counts[port] += 1
+                    # Increment the element with a counter suffix
+                    l_POD_in_edi[i] = f"{port}{element_counts[port]}"
+                else:
+                    element_counts[port] = 1
 
-            df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
-            self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
-            l_POD_in_edi = df_attributes['LOC_11_LOCATION_ID'].unique()
             l_POD_profile.extend([attribute for attribute in l_POD_in_edi if attribute not in l_POD_profile and attribute != ''])
         return l_POD_profile
-    
+
     def __run_first_execution(self) -> None:
 
         # get csv headers dict, list, and prefixes list present in the Baplie message
+        self.logger.info("Reading csv_cols_segments_map from referential configuration folder...")
         d_csv_cols_to_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_cols_segments_map.json", s3_bucket=self.__s3_bucket_in)
+        self.logger.info("Reading main_sub_segments_map from referential configuration folder...")
         d_main_to_sub_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/main_sub_segments_map.json", s3_bucket=self.__s3_bucket_in)
         # iso codes sizes and heights map (to check iso codes)
         self.logger.info("Reading iso_code_map from referential configuration folder...")
@@ -734,9 +799,10 @@ class MainLayer():
         self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
 
-        l_POD_profile = self.__get_pod_from_baplies_uploaded(d_csv_cols_to_segments_map, d_main_to_sub_segments_map)  
-        last_index_in_rotations = rotation_intermediate[rotation_intermediate['ShortName'].isin(l_POD_profile)].index.max()
-        rotation_intermediate = rotation_intermediate.iloc[:(last_index_in_rotations + 1)]
+        l_POD_profile = self.__get_pod_from_baplies_uploaded(d_csv_cols_to_segments_map, d_main_to_sub_segments_map)
+        # last_index_in_rotations = rotation_intermediate[rotation_intermediate['ShortName'].isin(l_POD_profile)].index.max()
+        # rotation_intermediate = rotation_intermediate.iloc[:(last_index_in_rotations + 1)]
+        self.logger.info("*"*80)
         self.logger.info("Reading consumption csv file from referential vessels folder...")
         consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
         self.logger.info("Extracting StdSpeed, GmDeck, MaxDraft, lashing calculation configuration and service line for call_01 from rotation intermediate...")
@@ -744,7 +810,6 @@ class MainLayer():
         self.__AL.validate_data(lashing_parameters_dict)
         self.__AL.check_if_errors()
         self.logger.info("*"*80)
-        
         # # Intialize worst cast files generation 
         self.__service_code = lashing_parameters_dict[0]['service']
         # # Check if service code exists in EDI referentials 
@@ -762,7 +827,7 @@ class MainLayer():
                     baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
                     folder_name_split = folder_name.split("_")
                     call_id = "_".join(folder_name_split[-2:])
-                    loadlist_flag = 0 
+                    loadlist_flag = 0
                     for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                         if i <2:
                             loadlist_flag = 1
@@ -772,54 +837,53 @@ class MainLayer():
                     self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
                     
                 self.__AL.check_if_errors()
-            else: 
+            else:
                 self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
-            self.logger.info("*" * 80)   
-        else: 
+            self.logger.info("*" * 80)
+        else:
             self.logger.info(f"Service line {self.__service_code} not found in EDI referentials...")
-            self.logger.info("*" * 80)  
-            
+            self.logger.info("*" * 80)
         # Intialize Vessel
         self.logger.info(f"Creating Vessel instance for vessel: {self.__vessel_id}")
         # vessel profile file in referentials
         self.logger.info(f"Reading vessel_profile.json & DG_rules.json configuration file from referential vessel folder for vessel: {self.__vessel_id}...")
         vessel_profile = self.__DL.read_json(f"{self.__vessels_static_in_dir}/vessel_profile.json", s3_bucket=self.__s3_bucket_in)
-        
+
         # DG_rules config JSON for Vessel
         DG_rules = self.__DL.read_json(f"{self.__vessels_static_in_dir}/DG_rules.json", s3_bucket=self.__s3_bucket_in)
-        
-        # DG Exclusions 
+
+        # DG Exclusions
         dg_exclusions_csv_path = f"{self.__vessels_static_in_dir}/DG Exclusions.csv"
         dg_exclusions_df =  self.__DL.read_csv(dg_exclusions_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
-        
-        # Vessel Stacks 
+
+        # Vessel Stacks
         stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
         stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
         l_stacks_lines = self.__DL.read_csv_lines(stacks_csv_path, s3_bucket=self.__s3_bucket_in, new_line="\n")
         fn_stacks = self.__PL.get_list_of_lines_as_df(l_stacks_lines)
-        
+
         std_speed = float(lashing_parameters_dict[0]['StdSpeed'])
         draft = float(lashing_parameters_dict[0]['MaxDraft'])
         gm_deck = float(lashing_parameters_dict[0]['Gmdeck'])
-        
+
         vessel = Vessel(self.logger, std_speed, gm_deck, draft, vessel_profile, DG_rules, dg_exclusions_df, fn_stacks)
-        
-        #Iniatlize Lashing 
+
+        #Iniatlize Lashing
         lashing_conditions = lashing_parameters_dict[0]['worldwide']
         lashing = Lashing(self.logger, vessel, lashing_conditions)
         self.logger.info("*"*80)
-        
+
         # empty lists for dataframes that are going to be saved as csvs and their folder names (used in the names of the csvs)
         l_dfs_containers, l_containers_folder_names, l_dfs_rotation_containers = [], [], []
         l_dfs_tanks, l_tanks_baplies_paths, l_tanks_folder_names = [], [], []
-        
+
         l_baplies_filepaths = []
         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                     if file_name.split(".")[-1] == "edi":
                         file_name_path = f"{baplies_dir}/{file_name}"
-                        l_baplies_filepaths.append(file_name_path)     
+                        l_baplies_filepaths.append(file_name_path)
 
         for baplie_path in l_baplies_filepaths:
             folder_name = self.__DL.get_folder_name_from_path(baplie_path)
@@ -829,12 +893,8 @@ class MainLayer():
             file_type = file_name.split(".")[0]
             self.logger.info(f"Reading {file_name} from {folder_name}...")
 
-            # get csv headers dict, list, and prefixes list present in the Baplie message
-            d_csv_cols_to_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_cols_segments_map.json", s3_bucket=self.__s3_bucket_in)
-            d_main_to_sub_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/main_sub_segments_map.json", s3_bucket=self.__s3_bucket_in)
-
             df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
-        
+
             self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
 
             if baplie_type_from_file_name == baplie_type_from_content:
@@ -848,7 +908,7 @@ class MainLayer():
                     call_port_seq_num = int(folder_name_split[-2])
                     call_port_name = self.__d_seq_num_to_port_name[call_port_seq_num]
                     call_port_name_base = call_port_name[:5]
-                    
+
                     # check whether duplicate EQD_ID exists
                     self.__AL.check_containers_serial_nums_dups(df_attributes, call_id, file_type)
                     #check POL of all containers
@@ -860,7 +920,7 @@ class MainLayer():
                                                                     call_id,
                                                                     file_type
                                                                 )
-                    
+
                     # df_attributes preprocessing for used cols
                     # DGS_HAZARD_ID will be processed in a future step in df_all_containers.fillna("", inplace=True)
                     df_attributes = self.__PL.process_slots(df_attributes, 1)
@@ -870,9 +930,8 @@ class MainLayer():
                     if not call_port_seq_num:
                         df_filled_slots = self.__get_df_filled_slots(df_attributes)
                         self.__AL.check_dup_slots(df_filled_slots, call_id, file_type)
-                        
-                        l_past_POLs_names = list(set([ POL_name for POL_name in df_attributes["LOC_9_LOCATION_ID"].tolist() if POL_name.isalpha() ]))
 
+                        l_past_POLs_names = list(set([ POL_name for POL_name in df_attributes["LOC_9_LOCATION_ID"].tolist() if POL_name.isalpha() ]))
                     df_attributes = self.__AL.check_and_handle_PODs_names(
                                                                     df_attributes,
                                                                     self.__d_port_name_to_seq_num,
@@ -885,11 +944,11 @@ class MainLayer():
                     if call_port_seq_num: # if a LoadList
                         # clear potential filleds slots for all LLs
                         df_attributes = self.__AL.check_filled_slots_in_LLs(df_attributes, call_id, file_type)
-                    
+
                     # mapping PODs
                     df_attributes = self.__ML.map_PODs_in_df(df_attributes, l_past_POLs_names, call_port_name_base, call_port_seq_num)
                     # self.__AL.add_PODs_anomalies(l_err_container_ids, call_id, file_type)
-                    
+
                     self.__AL.check_ISO_codes(df_attributes, d_iso_codes_map, call_id, file_type)
                     self.__AL.check_weights(df_attributes, call_id, file_type)
 
@@ -922,7 +981,7 @@ class MainLayer():
                                df_attributes[col] = ""
 
                     df_attributes = self.__add_lowest_DGS_cols_to_df(df_attributes, d_csv_cols_to_segments_map)
-                    
+
                     df_rotation = df_attributes[['EQD_ID', 'LOC_9_LOCATION_ID', 'LOC_11_LOCATION_ID']]
 
                     ## END OF SECTION ##
@@ -935,7 +994,7 @@ class MainLayer():
                     l_dfs_tanks.append(df_attributes)
                     l_tanks_baplies_paths.append(baplie_path)
                     l_tanks_folder_names.append(folder_name)
-                
+
                 else:
                     self.logger.info("*"*80)
                     continue
@@ -943,19 +1002,23 @@ class MainLayer():
                 self.logger.info("*"*80)
 
             else: continue
-            
+
         self.__AL.check_if_errors()
-        
+
         self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         fuel_data_dict = fuel_costs_df.set_index('FUEL_TYPE')['COST_USD'].to_dict()
         self.logger.info("Generating final rotation.csv...")
+        
         rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, l_containers_folder_names, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict)
         df_rotation_final = rotations.get_rotations_final()
+        last_index_in_rotations = df_rotation_final[df_rotation_final['ShortName'].isin(l_POD_profile)].index.max()
+        df_rotation_final = df_rotation_final.iloc[:(last_index_in_rotations + 1)]
+        df_rotation_final["ShortName"] = df_rotation_final["ShortName"].apply(lambda x: x[:5])
         rotation_csv_name = "rotation.csv"
         rotation_csv_path = f"{self.__py_scripts_out_dir}/{rotation_csv_name}"
         self.__DL.write_csv(df_rotation_final, rotation_csv_path, s3_bucket=self.__s3_bucket_out)
-        
+
         # saving after to save time as an error might be thrown before
         for i, df in enumerate(l_dfs_containers):
             folder_name = l_containers_folder_names[i]
@@ -968,16 +1031,16 @@ class MainLayer():
         lashing_df = lashing.perform_lashing_calculations(l_dfs_containers[0], l_containers_folder_names[1][-5:])
         lashing_csv_name = f"on_board_lashing.csv"
         self.logger.info("*"*80)
-        
+
         self.logger.info(f"Saving OnBoard lashing Calculation...")
         lashing_csv_path = f"{self.__py_scripts_out_dir}/{lashing_csv_name}"
         self.__DL.write_csv(lashing_df, lashing_csv_path, s3_bucket=self.__s3_bucket_out)
-        
+
         for i, df in enumerate(l_dfs_tanks):
             port_tanks_csv_name = f"{l_tanks_folder_names[i]}_tank.csv"
             port_tanks_csv_path = f"{self.__py_scripts_out_dir}/{port_tanks_csv_name}"
             self.__DL.write_csv(df, port_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
-        
+
         # combined csv from all containers csvs
         self.logger.info(f"Saving extracted info from {baplie_type_from_file_name}s baplies...")
         df_all_containers = pd.concat(l_dfs_containers, axis=0, ignore_index=True)
@@ -988,9 +1051,9 @@ class MainLayer():
         imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
         imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str) 
         d_DG_loadlist_config = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_config.json", self.__s3_bucket_in)
-        
+
         dg_instance = DG(self.logger, vessel, d_DG_loadlist_config, imdg_codes_df, self.__DG_Rules)
-        
+
         self.logger.info("Extracting and saving DG LoadList...")
         df_DG_loadlist = dg_instance.get_df_dg_loadlist(df_all_containers)
         DG_csv_name =  "DG Loadlist.csv"
@@ -1002,14 +1065,13 @@ class MainLayer():
         DG_csv_name =  "DG Loadlist Exclusions.csv"
         DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
         self.__DL.write_csv(df_loadlist_exclusions, DG_csv_path, self.__s3_bucket_out)
-        
-    
+
         df_DG_classes_expanded_updated = dg_instance.output_adjusted_table_7_2_4(df_DG_classes_expanded, df_DG_loadlist)
         df_DG_classes_grouped = self.__PL.get_df_DG_classes_grouped(df_DG_loadlist, df_DG_classes_expanded_updated)
         df_DG_classes_grouped_to_save = self.__PL.get_df_DG_classes_grouped_to_save(df_DG_classes_grouped)
         df_DG_classes_grouped_to_save_csv_path = f"{self.__py_scripts_out_dir}/table_7_2_4_grouped.csv"
         self.__DL.write_csv(df_DG_classes_grouped_to_save, df_DG_classes_grouped_to_save_csv_path, self.__s3_bucket_out)
-        
+
         l_container_groups_containers_lines = self.__output_CPLEX_input_container_csvs(df_all_containers, df_filled_slots, df_DG_classes_expanded, d_iso_codes_map)
         self.logger.info("Extracting and saving DG LoadList Exclusion Zones & Nb DG ...")
         df_grouped_containers = self.__PL.get_list_of_lines_as_df(l_container_groups_containers_lines)
@@ -1037,20 +1099,20 @@ class MainLayer():
         POL_POD_revenues_csv_name = "Revenues by Size Type POL POD.csv"
         POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{self.__service_code}/{POL_POD_revenues_csv_name}"
         df_POL_POD_revenues = self.__DL.read_csv(POL_POD_revenues_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
-        
+
         df_uslax_path =  f"{self.__static_in_dir}/los_angeles.csv" if self.__static_in_dir else "los_angeles.csv"
         df_uslax = self.__DL.read_csv(df_uslax_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
-        
+
         # loading stacks
         stacks_csv_name = "Stacks Extrait Prototype MP_IN.csv"
         stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
         df_stacks = self.__DL.read_csv(stacks_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
-        
+
         df_final_containers_csv_name = "containers.csv"
         df_final_containers = self.__PL.get_df_containers_final(df_all_containers, df_containers_config, d_iso_codes_map, df_uslax, df_POL_POD_revenues, df_rotation_final, df_stacks, df_DG_loadlist, df_loadlist_exclusions)
         df_final_containers_csv_path = f"{self.__py_scripts_out_dir}/{df_final_containers_csv_name}"
         self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
-        
+
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")
         self.logger.info("*"*80)
@@ -1076,7 +1138,7 @@ class MainLayer():
     def __update_csvs_with_CPLEX_output(self, d_cplex_containers_slot_by_id: dict, d_cplex_containers_slot_by_id_keys: dict) -> 'tuple[pd.DataFrame, pd.DataFrame]':
         for i, csv_path in enumerate(self.__l_POL_POD_csvs_paths):
             df = self.__DL.read_csv(csv_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
-            
+
             df.fillna("", inplace=True)
             df = self.__PL.process_slots(df, 1, True)
 
@@ -1089,7 +1151,7 @@ class MainLayer():
                     l_slot_positions.append("")
                 else:
                     l_slot_positions.append(pos)
-            
+
             l_containers_to_drop_indices = []
             for j, container_id in enumerate(l_containers_ids):
                 if container_id in d_cplex_containers_slot_by_id_keys:
@@ -1099,18 +1161,18 @@ class MainLayer():
                     l_containers_to_drop_indices.append(j)
 
             df.iloc[:, 1] = l_slot_positions
-            
+
             if i == 0:
                 df.drop(l_containers_to_drop_indices, inplace=True)
                 df.reset_index(inplace=True, drop=True)
-            
+
             self.__DL.write_csv(df, csv_path, s3_bucket=self.__s3_bucket_out)
 
         l_dfs_containers, l_dfs_filled_slots = [], []
         for file_name in self.__DL.list_files_in_path(self.__py_scripts_out_dir, s3_bucket=self.__s3_bucket_out):
             if "_container.csv" not in file_name:
                 continue
-            
+
             csv_path = f"{self.__py_scripts_out_dir}/{file_name}"
             df_containers = self.__DL.read_csv(csv_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
             df_containers.fillna("", inplace=True)
@@ -1119,9 +1181,9 @@ class MainLayer():
             if csv_path in self.__l_POL_POD_csvs_paths:
                 df_filled_slots_temp = self.__get_df_filled_slots(df_containers)
                 l_dfs_filled_slots.append(df_filled_slots_temp)
-            
+
             l_dfs_containers.append(df_containers)
-        
+
         df_filled_slots = pd.concat(l_dfs_filled_slots, axis=0, ignore_index=True)
         df_filled_slots.fillna("", inplace=True)
 
@@ -1135,12 +1197,12 @@ class MainLayer():
         l_containers_ids = []
         containers_count = 0 # for logging
         for i, csv_path in enumerate(self.__l_POL_POD_csvs_paths):
-            
+
             df  = self.__DL.read_csv(csv_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
             df = self.__PL.process_slots(df, 1, True)
             l_containers_ids_temp = df["EQD_ID"].tolist()   
             l_containers_ids += l_containers_ids_temp
-   
+
         containers_data_list = []
         for i, path in enumerate(self.__l_POL_POD_containers_baplies_paths):
             folder_name = self.__DL.get_folder_name_from_path(path)

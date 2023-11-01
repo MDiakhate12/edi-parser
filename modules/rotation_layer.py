@@ -365,5 +365,5 @@ class rotation():
             'MaxRowWidth', 'EstimContWeight', 'MaxDraft', 'HourlyCost', 'WindowStartTime', 'WindowEndTime', 'TimeIn', 'TimeOut']    
         # Create the DataFrame with the specified column order
         rotation_final_df = pd.DataFrame.from_dict(d_rotation, orient='index', columns=column_order)
-        
+        rotation_final_df.reset_index(drop=True, inplace=True)
         return rotation_final_df
