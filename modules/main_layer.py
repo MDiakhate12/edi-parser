@@ -62,12 +62,17 @@ class MainLayer():
         #check for correctness of files 
         logger.info("before __init_params_from_folders_names")
         # clear previous simulation folders
-        self.__DL.clear_folder(self.__dynamic_in_dir, self.__s3_bucket_out)
-        self.__DL.clear_folder(self.__py_scripts_out_dir, self.__s3_bucket_out)
-        self.__DL.clear_folder(self.__cplex_out_dir, self.__s3_bucket_out)
-        # copy files from origin to in_preprocessing folder
-        self.__copy_webapp_input_into_in_preprocessing()
-        self.__handle_anomaly_containers_ids_in_baplies()
+        if not self.__reuse_previous_results:
+            self.logger.info("*"*80)
+            self.logger.info("Clearing folders in case there was a previous simulation...") 
+            self.__DL.clear_folder(self.__dynamic_in_dir, self.__s3_bucket_out)
+            self.__DL.clear_folder(self.__py_scripts_out_dir, self.__s3_bucket_out)
+            self.__DL.clear_folder(self.__cplex_out_dir, self.__s3_bucket_out)
+            self.logger.info("*"*80)
+            # copy files from origin to in_preprocessing folder
+            self.__copy_webapp_input_into_in_preprocessing()
+            self.__handle_anomaly_containers_ids_in_baplies()
+            self.logger.info("*"*80)
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
 
         # intialize mapping layer
@@ -685,7 +690,7 @@ class MainLayer():
         self.__DL.write_csv(df_filled_subtanks, filled_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
 
     def __copy_webapp_input_into_in_preprocessing(self):
-
+        self.logger.info("Copying files uploaded from webapp into in_preprocessing directory...")
         # read baplies already existing from webapp
         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
             baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_origin_dir}/{folder_name}"
@@ -700,6 +705,8 @@ class MainLayer():
         self.__DL.copy_file(rotation_csv_dir, rotation_csv_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "rotation.csv")
 
     def __handle_anomaly_containers_ids_in_baplies(self):
+        self.logger.info("*"*80)
+        self.logger.info("Checking files uploaded for missing or duplicated Container IDs...")
         EQD_pattern = r'EQD\+CN\+.*'
         # read baplies already existing from webapp
         seen_values = set()
@@ -710,9 +717,9 @@ class MainLayer():
                 #start of file handling for missing EQD or duplicates
                 if file_name in ["LoadList.edi", "OnBoard.edi"]:
                     baplies_path = f"{baplies_dir}{file_name}" if self.__s3_bucket_out == "" else f"{baplies_dir}/{file_name}"
+                    self.logger.info(f"Checking {baplies_path}...")
                     baplie_segments =self.__DL.read_baplie_as_list(baplies_path, self.__s3_bucket_out)
                     # Create a set to keep track of seen xxxxxxxx values and their positions
-                    
                     modified_flag = False
                     for i, element in enumerate(baplie_segments):
                         match = re.search(EQD_pattern, element)
@@ -728,15 +735,19 @@ class MainLayer():
                                 while new_value in generated_values or new_value is None:
                                     new_value = "STOW" + ''.join(random.choices(string.digits, k=7))
                                 generated_values.add(new_value)
+                                old_container_id = old_container_id_segment[0]
                                 old_container_id_segment[0] = new_value
                                 container_segment[2] = ":".join(old_container_id_segment)
-                                baplie_segments[i] = "+".join(container_segment)   
+                                baplie_segments[i] = "+".join(container_segment)  
+                                self.logger.info(f"Container id: {old_container_id} renamed to {new_value}...")
                             else:
                                 seen_values.add(container_id)
 
                     if modified_flag:
+                        
                         final_baplie = "'".join(baplie_segments)
                         destination_path = f"{self.__dynamic_in_dir}/{folder_name}/{file_name}"
+                    self.logger.info(f"Updating file {destination_path}...")
                     self.__DL.write_file(final_baplie, destination_path, self.__s3_bucket_out)
 
     def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
@@ -791,15 +802,16 @@ class MainLayer():
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
 
         # Add Rotations before (identify (gm, std speed , draft and service line from rotation intermediate ))
-        self.logger.info("*" * 80)
         self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
         rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
         self.logger.info("Reading stevedoring cost from referential costs folder...")
         RW_costs = self.__DL.read_csv(self.__stevedoring_RW_costs_path, na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in, sep=";")
         self.logger.info("Reading Rotations intermediate csv file from simulation in folder...")
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
-
+        self.logger.info("*"*80)
+        self.logger.info("Getting list of POD from Baplies...")
         l_POD_profile = self.__get_pod_from_baplies_uploaded(d_csv_cols_to_segments_map, d_main_to_sub_segments_map)
+        self.logger.info(f"Ports of Discharge in Baplies are : {l_POD_profile}")
         # last_index_in_rotations = rotation_intermediate[rotation_intermediate['ShortName'].isin(l_POD_profile)].index.max()
         # rotation_intermediate = rotation_intermediate.iloc[:(last_index_in_rotations + 1)]
         self.logger.info("*"*80)

@@ -150,7 +150,7 @@ class DataLayer():
         
     def list_folders_in_path(self, path, s3_bucket: str="") -> list:
         if self.__is_local:
-            self.__logger.info("list files in path from local")
+            self.__logger.info("list folders in path from local")
             #file_list = os.listdir(path)
             folders_list = [folder for folder in os.listdir(path) if os.path.isdir(os.path.join(path, folder))]
         
@@ -175,15 +175,20 @@ class DataLayer():
         if self.__is_local:
             # For local, delete the entire folder and recreate it
             destination_folder = os.path.join(destination_bucket_name, destination_key)
+            self.__logger.info(f"Clearing folder : {destination_folder} ...")
             if os.path.exists(destination_folder):
                 shutil.rmtree(destination_folder)
             os.makedirs(destination_folder)
         else:
             # For AWS S3, delete all objects (including objects in subfolders) in the folder
+            self.__logger.info(f"Clearing S3 Directory : {destination_bucket_name} ...")
             s3 = boto3.client('s3')
             objects_to_delete = s3.list_objects_v2(Bucket=destination_bucket_name, Prefix=destination_key)
+            
             if 'Contents' in objects_to_delete:
+                self.__logger.info(f"objects to delete: {objects_to_delete['Contents']} ...")
                 delete_keys = [{'Key': obj['Key']} for obj in objects_to_delete['Contents']]
+                
                 s3.delete_objects(Bucket=destination_bucket_name, Delete={'Objects': delete_keys})
 
     def copy_file(self, source_key:str, destination_key:str, source_bucket_name:str="", destination_bucket_name:str="", file_name:str="LoadList.edi") -> None:
@@ -191,9 +196,9 @@ class DataLayer():
             # Copy the file locally
             # Create the destination directory if it doesn't exist
             os.makedirs(destination_key, exist_ok=True)
-
             source_file = os.path.join(source_bucket_name, source_key)
             destination_file = os.path.join(destination_bucket_name, destination_key, file_name)
+            self.__logger.info(f"Copying {source_file} to {destination_file}...")
             shutil.copy(source_file, destination_file)
         else:
             destination_key = os.path.join(destination_key, file_name)
@@ -203,6 +208,7 @@ class DataLayer():
                 'Bucket': source_bucket_name,
                 'Key': source_key
             }
+            self.__logger.info(f"Copying {copy_source['Key']} to {destination_key}...")
             s3.copy_object(
                 Bucket=destination_bucket_name,
                 CopySource=copy_source,
