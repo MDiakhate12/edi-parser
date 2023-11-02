@@ -724,10 +724,11 @@ class MainLayer():
                     for i, element in enumerate(baplie_segments):
                         match = re.search(EQD_pattern, element)
                         if match:
-                            modified_flag = True
+                            
                             container_id = match.group(0).split('+')[2].split(':')[0]
                             # Check for empty string or repeated values
                             if container_id == '' or container_id in seen_values:
+                                modified_flag = True
                                 # Replace with "STOW" + 7 random digits
                                 container_segment = baplie_segments[i].split('+')
                                 old_container_id_segment = container_segment[2].split(':')
@@ -747,8 +748,8 @@ class MainLayer():
                         
                         final_baplie = "'".join(baplie_segments)
                         destination_path = f"{self.__dynamic_in_dir}/{folder_name}/{file_name}"
-                    self.logger.info(f"Updating file {destination_path}...")
-                    self.__DL.write_file(final_baplie, destination_path, self.__s3_bucket_out)
+                        self.logger.info(f"Updating file {destination_path}...")
+                        self.__DL.write_file(final_baplie, destination_path, self.__s3_bucket_out)
 
     def __get_pod_from_baplies_uploaded(self, d_csv_cols_to_segments_map:dict, d_main_to_sub_segments_map:dict)-> list:
         # read baplies already existing from webapp
