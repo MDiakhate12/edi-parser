@@ -21,14 +21,14 @@ if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
 
 
-# Create a console handler
-console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.DEBUG)
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+# # Create a console handler
+# console_handler = logging.StreamHandler()
+# console_handler.setLevel(logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Set the formatter for the console handler
-console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console_handler.setFormatter(console_formatter)
+# # Set the formatter for the console handler
+# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# console_handler.setFormatter(console_formatter)
 
 class MainLayer():
     def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket_out: str="", s3_bucket_in: str="") -> None:
