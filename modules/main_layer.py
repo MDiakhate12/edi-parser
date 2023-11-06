@@ -22,13 +22,7 @@ if "" in DEFAULT_MISSING:
 
 
 # # Create a console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setLevel(logging.DEBUG)
 # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-# # Set the formatter for the console handler
-# console_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-# console_handler.setFormatter(console_formatter)
 
 class MainLayer():
     def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket_out: str="", s3_bucket_in: str="") -> None:
@@ -74,7 +68,6 @@ class MainLayer():
             self.__handle_anomaly_containers_ids_in_baplies()
             self.logger.info("*"*80)
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
-
         # intialize mapping layer
         self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
 
@@ -789,6 +782,8 @@ class MainLayer():
                     element_counts[port] = 1
 
             l_POD_profile.extend([attribute for attribute in l_POD_in_edi if attribute not in l_POD_profile and attribute != ''])
+            l_POD_profile = [*set(["USLAX" if pod.startswith("USLA") else pod for pod in l_POD_profile])]
+
         return l_POD_profile
 
     def __run_first_execution(self) -> None:
@@ -801,7 +796,6 @@ class MainLayer():
         # iso codes sizes and heights map (to check iso codes)
         self.logger.info("Reading iso_code_map from referential configuration folder...")
         d_iso_codes_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/ISO_size_height_map.json", s3_bucket=self.__s3_bucket_in)
-
         # Add Rotations before (identify (gm, std speed , draft and service line from rotation intermediate ))
         self.logger.info("Reading rotation_csv column mapping from referential configuration folder...")
         rotation_csv_maps = self.__DL.read_json(f"{self.__jsons_static_in_dir}/rotation_csv_maps.json", s3_bucket=self.__s3_bucket_in)
