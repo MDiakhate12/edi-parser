@@ -650,10 +650,10 @@ class DG:
         df_DG_loadlist.reset_index(inplace=True, drop=True)
         return df_DG_loadlist
 
-    def __handle_missing_sw1_class_3(self, df_DG_loadlist: pd.DataFrame): 
+    def __handle_missing_sw1_flammable_class(self, df_DG_loadlist: pd.DataFrame): 
         def update_stowage(row):
             # Check the conditions
-            if (row['Class'] == "3" or row['SubLabel1'] == "3" or row['SubLabel2'] == "3") and (row['PGr'] in ['I', 'II']) and ('SW1' not in row['Stowage and segregation']):
+            if (row['Class'] in ["3", "4.1", "4.2", "4.3"] or row['SubLabel1'] in ["3", "4.1", "4.2", "4.3"] or row['SubLabel2'] in ["3", "4.1", "4.2", "4.3"]) and (row['PGr'] in ['I', 'II']) and ('SW1' not in row['Stowage and segregation']):
                 if row['Stowage and segregation'] == "":
                     return 'SW1'
                 else:
@@ -682,10 +682,10 @@ class DG:
             self.__get_non_flammable_state(df_DG_loadlist)
             self.__get_zone_port(df_DG_loadlist)
             self.__get_loading_remarks(df_DG_loadlist)
-            self.__handle_missing_sw1_class_3(df_DG_loadlist)
+            self.__handle_missing_sw1_flammable_class(df_DG_loadlist)
             df_DG_loadlist = self.__add_not_permitted_bay_column(df_DG_loadlist)
             df_DG_loadlist = self.__reorder_df_DG_loadlist_cols(df_DG_loadlist)
-        else: 
+        else:
             DG_cols = ("Serial Number;Operator;POL;POD;Type;Closed Freight Container;Weight;Regulation Body;Ammendmant Version;UN;Class;SubLabel1;SubLabel2;" +\
                         "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC);FlashPoints;Loading remarks;" +\
                         "Limited Quantity;Marine Pollutant;PGr;Liquid;Solid;Flammable;Non-Flammable;Proper Shipping Name (Paragraph B of DOC);" +\
