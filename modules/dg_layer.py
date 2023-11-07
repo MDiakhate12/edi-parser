@@ -653,7 +653,7 @@ class DG:
     def __handle_missing_sw1_flammable_class(self, df_DG_loadlist: pd.DataFrame): 
         def update_stowage(row):
             # Check the conditions
-            if (row['Class'] in ["3", "4.1", "4.2", "4.3"] or row['SubLabel1'] in ["3", "4.1", "4.2", "4.3"] or row['SubLabel2'] in ["3", "4.1", "4.2", "4.3"]) and (row['PGr'] in ['I', 'II']) and ('SW1' not in row['Stowage and segregation']):
+            if (row['Class'] in ["3"] or row['SubLabel1'] in ["3"] or row['SubLabel2'] in ["3"]) and (row['PGr'] in ['I', 'II']) and ('SW1' not in row['Stowage and segregation']) or (row['Class'] in ["4.1", "4.2", "4.3"] or row['SubLabel1'] in ["4.1", "4.2", "4.3"] or row['SubLabel2'] in ["4.1", "4.2", "4.3"]) and ('SW1' not in row['Stowage and segregation']):
                 if row['Stowage and segregation'] == "":
                     return 'SW1'
                 else:
