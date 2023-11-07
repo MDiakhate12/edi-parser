@@ -110,10 +110,10 @@ def handle_error(e: Exception, event: dict, bucket_data_name: str, table_dynamoD
     target_key = "error.txt"
 
     if reuse_previous_results:
-        write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key, status='POST-KO')
+        write_records_dynamoDB(logger, bucket_data_name, simulation_id, table_dynamoDB, target_key, status='POST-KO')
         err_msg = "There was an error while running the lambda handler for Post-Processing..."
     else:
-        write_records_dynamoDB(bucket_data_name, simulation_id, table_dynamoDB, target_key, status='PRE-KO')
+        write_records_dynamoDB(logger, bucket_data_name, simulation_id, table_dynamoDB, target_key, status='PRE-KO')
         err_msg = "There was an error while running the lambda handler for Pre_Processing..."
     
     log_and_store_error(e, err_msg, simulation_id, event, bucket_data_name)
