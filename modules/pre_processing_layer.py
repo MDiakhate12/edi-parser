@@ -2153,7 +2153,7 @@ class PreProcessingLayer():
         #df.drop(columns=["Revenue_x", "Revenue_y"], inplace=True)
         
         # Unavailable revenues are set to 1000
-        df["Revenue"] = np.where(df["Revenue"].isnull(), 100000, df["Revenue"])
+        df["Revenue"] = np.where(df["Revenue"].isnull(), 10000, df["Revenue"])
 
         return df
 
