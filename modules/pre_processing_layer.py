@@ -217,7 +217,8 @@ class PreProcessingLayer():
         
         if "EQD_MEA_AET_MEASURE" in df_cols:
             d_weights_by_method["EQD_MEA_AET_MEASURE"] = df["EQD_MEA_AET_MEASURE"].tolist()
-
+            
+        l_weights = []
         if len(d_weights_by_method["EQD_MEA_VGM_MEASURE"]) and len(d_weights_by_method["EQD_MEA_AET_MEASURE"]):
             # fill missing values in Weight column (EQD_MEA_VGM) from Weight_2 column (EQD_MEA_AET)
             l_AET_weights = d_weights_by_method["EQD_MEA_AET_MEASURE"]
