@@ -1085,7 +1085,7 @@ class DG:
         df['solid'] = df['s_solid'].apply(lambda x: x == 'x')
         df['solid'] = df.apply(lambda row: True if not row['solid'] and not row['liquid'] else row['solid'], axis=1)
         df['flammable'] = df['s_flammable'].apply(lambda x: x == 'x')
-        df['polmar'] = df['s_polmar'].apply(lambda x: x == 'x')
+        df['polmar'] = df['s_polmar'].apply(lambda x: x == 'yes')
         df['sw_1'] = df['s_stowage_segregation'].apply(lambda x: "SW1" in str(x))
         df['sw_2'] = df['s_stowage_segregation'].apply(lambda x: "SW2" in str(x))
         df['flash_point'] = df['s_flash_point'].apply(lambda x: float(x) if pd.notna(x) and len(str(x)) > 0 else None)
@@ -1217,7 +1217,7 @@ class DG:
         
         return l_sw2   
     
-    def __get_polmar_exclusion_zones(self, l_deck_bays:list)-> list:
+    def __get_polmar_exclusion_zones(self, l_deck_bays:list)-> tuple:
         
         l_polmar_bays_all_positions = self.__DG_rules['l_polmar_bays_exclusion_all_positions']
         row_tiers_per_bay = self.__vessel_profile['Rows_Tiers_per_Bay']
@@ -1227,9 +1227,10 @@ class DG:
         l_decks_polmar_extension = ["%03d" % n for n in l_deck_bays if n not in l_polmar_bays_all_positions]
         l_rows_polmar_extension = [frozenset({str(row_end_per_bay[n] - 1), str(row_end_per_bay[n])}) for n in l_deck_bays if n not in l_polmar_bays_all_positions]
     
-        l_polmar = ["{:03d}1".format(x) for x in l_polmar_bays_all_positions]
+        l_polmar_master = ["{:03d}1".format(x) for x in l_polmar_bays_all_positions]
+        l_polmar = []
         l_polmar.extend([(x[0], x[1], ('1', None)) for x in zip(l_decks_polmar_extension, l_rows_polmar_extension)])
-        return l_polmar
+        return l_polmar, l_polmar_master
     
     def __expand_exclusion(self, set_exclusions: set, l_updates: list) -> set:
         
@@ -1266,12 +1267,12 @@ class DG:
                     set_exclusions.add(update)
         
         return set_exclusions
-    
+
     def __apply_exclusion_expansions(self, d_containers_exclusions:dict, df_dg_exclusions:pd.DataFrame):
         dg_exclusions_by_category = self.__get_dg_exclusions_ref_dict()
         l_deck_bays, l_hold_bays, l_hold_zones = self.__get_deck_hold_bays()
         l_sw_1 = self.__get_sw1_exclusion_list()
-        l_polmar = self.__get_polmar_exclusion_zones(l_deck_bays)
+        l_polmar, l_polmar_master = self.__get_polmar_exclusion_zones(l_deck_bays)
         l_sw_2 = self.__get_sw2_exclusion_list()
         for idx, row in df_dg_exclusions.iterrows():
             d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])], 
@@ -1282,11 +1283,21 @@ class DG:
             if row['sw_2'] == True:
                 d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])],
                                                                                     l_sw_2)
-            if self.__DG_rule == "slot":       
+            if self.__DG_rule == "master":
+                if row['polmar'] == True:
+                    # change to l_polmar_master in case you want to only include exhaustive bays
+                    d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])],
+                                                                                            l_polmar_master)
+
+                    d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])],
+                                                                                            l_polmar)
+                    
+            if self.__DG_rule == "slot":
                 if row['sw_1'] == True:
                     d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])],
-                                                                                        l_sw_1)     
+                                                                                        l_sw_1)
                 if row['polmar'] == True:
+                
                     d_containers_exclusions[(row['container_id'], row['pol'])] = self.__expand_exclusion(d_containers_exclusions[(row['container_id'], row['pol'])],
                                                                                         l_polmar)
         return d_containers_exclusions
