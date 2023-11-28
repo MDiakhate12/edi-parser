@@ -367,9 +367,10 @@ class AnomalyDetectionLayer():
                     mapped_POD_name = d_rot_1st_4_chars_to_port_name_base[POD_name_1st_4_chars]
 
                 else:
+                    pass
                     #reactivate Error status
                     # self.__add_single_anomaly("Error", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
-                    self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
+                    # self.__add_single_anomaly("Warning", fictive_port_name_not_in_rot_err_msg, fictive_port_name_not_in_rot_err_val, call_id, file_type, container_id)
 
             else: # LL other than 1st LL
                 if not is_last_char_alpha:
@@ -599,6 +600,15 @@ class AnomalyDetectionLayer():
 
             l_err_container_ids = df[pds_dups_bool_mask]["EQD_ID"].tolist()
             self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)
+
+    def check_empty_slots_in_OnBoard(self, df: pd.DataFrame, call_id: str, file_type: str) -> None:
+        df_temp = df[df["LOC_147_ID"]==""]
+        if len(df_temp):
+            criticity = "Error"
+            message = self.__get_full_msg("with no slot position in an OnBoard list")
+            error_value = "TBD"
+            l_err_container_ids = df_temp["EQD_ID"].tolist()
+            self.__add_anomalies_from_list(l_err_container_ids, criticity, message, error_value, call_id, file_type)        
 
     def check_filled_slots_in_LLs(self, df: pd.DataFrame, call_id: str, file_type: str) -> None:
         df_temp = df[df["LOC_147_ID"]!=""]
@@ -923,5 +933,39 @@ class AnomalyDetectionLayer():
                         message = f"key worldwide = '{data_entry['worldwide']}' in rotation.csv is not 'UNRESTRICTED' or 'WORLDWIDE'..."
                         error_value = "TBD"
                         self.__add_single_anomaly(criticity, message, error_value, call_id=data_entry['CallFolderName'])
+
+
+    def validate_dg_data(self, dg_loadlist: pd.DataFrame) -> None:
+        """
+        Validates the DataFrame based on specific criteria.
+
+        This function checks if the 'StdSpeed', 'Gmdeck', and 'MaxDraft' columns in the DataFrame are numeric.
+        It also verifies that the 'worldwide' and 'service' columns consist of alphabetic characters only and that
+        the 'worldwide' column is either 'UNRESTRICTED' or 'WORLDWIDE'.
+
+        Parameters:
+            df (pd.DataFrame): The DataFrame containing the data to be validated.
+
+        Returns:
+            None
+        """
+        criticity = "Error"
+        df = dg_loadlist.copy()
+        # Check if 'StdSpeed', 'Gmdeck', and 'MaxDraft' columns are numeric
+        numeric_columns = ['DGS_UNDG_ID_', 'DGS_HAZARD_ID_']
+        column_names = ['UN Number', 'Class']
+        for index, row in df.iterrows():
+            for i, column in enumerate(numeric_columns):
+                try:
+                    float(row[column])
+                except ValueError:
+                    self.__add_single_anomaly(criticity, f"{column_names[i]} = '{row[column]}' is not numeric or does not exist...",
+                                            "TBD", container_id=row['EQD_ID'])
+            if row['DGS_HAZARD_CODE_VERSION_ID_'] == "":
+                self.__add_single_anomaly(criticity, f"Ammendment Version is empty...",
+                                            "TBD", container_id=row['EQD_ID'])
+        self.check_if_errors()
+
+
 
                 

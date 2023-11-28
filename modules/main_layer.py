@@ -4,12 +4,14 @@ import re
 import logging
 import random
 import string
+import argparse
+
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
 from modules.mapping_layer import MappingLayer as ML
 from modules.enrichment_layer import EnrichmentLayer as EL
 from modules.pre_processing_layer import PreProcessingLayer as PL
-from modules.lashing_calculation_layer import Lashing 
+from modules.lashing_calculation_layer import Lashing
 from modules.vessel import Vessel
 from modules.worst_case_edi_layer import worst_case_baplies
 from modules.rotation_layer import rotation
@@ -20,16 +22,47 @@ DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
 if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
 
+# DEFAULT_MISSING = {item for item in pd._libs.parsers.STR_NA_VALUES}
 
-# # Create a console handler
-# logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# CLI Parser
+# Create an ArgumentParser
+parser = argparse.ArgumentParser(description="Simulation")
+# Add command-line arguments for logging configuration
+parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "OFF"],
+                     default="INFO", help="Logging level")
+
+parser.add_argument("--enable-logging", action="store_true", help="Enable logging")
+# Parse command-line arguments
+args = parser.parse_args()
+# Configure logging based on command-line arguments
+if args.enable_logging:
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class MainLayer():
-    def __init__(self, logger: logging.Logger, event: dict, reusePreviousResults: bool, s3_bucket_out: str="", s3_bucket_in: str="") -> None:
+    def __init__(
+            self,
+            logger: logging.Logger,
+            event: dict,
+            reusePreviousResults: bool,
+            s3_bucket_out: str="",
+            s3_bucket_in: str="") -> None:
+        """
+        Initialize the MainLayer class.
+
+        Args:
+            logger (logging.Logger): The logger object for logging messages.
+            event (dict): A dictionary containing event data.
+            reusePreviousResults (bool): Indicates whether to reuse previous results(tag for whether to do PreProcessing or PostProcessing).
+            s3_bucket_out (str, optional): The S3 bucket for storing output data. Defaults to "" if local.
+            s3_bucket_in (str, optional): The S3 bucket for retrieving input data. Defaults to "" if local.
+
+        Returns:
+            None
+        """
         self.logger = logger
         logger.info(event)
-
-        # initialize data layer 
+        # initialize data layer
         self.__DL = DL(logger, s3_bucket_out, s3_bucket_in)
         d_event_json = event
         # other params
@@ -53,10 +86,20 @@ class MainLayer():
         self.__l_POL_POD_containers_baplies_paths = []
         self.__l_POL_POD_csvs_paths = []
         # folder name params
-        #check for correctness of files 
+        #check for correctness of files
         logger.info("before __init_params_from_folders_names")
         # clear previous simulation folders
         if not self.__reuse_previous_results:
+            self.__setup_in_preprocessing_layer()
+
+        self.__after_first_call_loadlist = self.__init_params_from_folders_names()
+        # intialize mapping layer
+        self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
+
+        # initialize processing layer
+        self.__PL = PL()
+
+    def __setup_in_preprocessing_layer(self) -> None:
             self.logger.info("*"*80)
             self.logger.info("Clearing folders in case there was a previous simulation...") 
             self.__DL.clear_folder(self.__dynamic_in_dir, self.__s3_bucket_out)
@@ -67,12 +110,6 @@ class MainLayer():
             self.__copy_webapp_input_into_in_preprocessing()
             self.__handle_anomaly_containers_ids_in_baplies()
             self.logger.info("*"*80)
-        self.__after_first_call_loadlist = self.__init_params_from_folders_names()
-        # intialize mapping layer
-        self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
-
-        # initialize processing layer
-        self.__PL = PL()
 
     def __init_file_paths_from_event(self, path: str, simulation_id: str, s3_bucket: str="") -> None:
         """
@@ -901,12 +938,15 @@ class MainLayer():
             self.logger.info(f"Reading {file_name} from {folder_name}...")
 
             df_attributes, baplie_type_from_file_name, baplie_type_from_content = self.__get_df_from_baplie_and_return_types(baplie_path, call_id, file_name, d_csv_cols_to_segments_map, d_main_to_sub_segments_map, self.__s3_bucket_out)
-
+            
             self.__AL.check_baplie_types_compatibility(baplie_type_from_file_name, baplie_type_from_content, call_id)
 
             if baplie_type_from_file_name == baplie_type_from_content:
 
                 if baplie_type_from_file_name == "container":
+                    if file_type == "OnBoard":
+                        self.__AL.check_empty_slots_in_OnBoard(df_attributes, call_id,file_type)
+                    
                     df_attributes = self.__AL.check_containers_with_no_identifier(df_attributes, call_id) 
 
                     # in case any container has no EQD_ID
@@ -1062,7 +1102,7 @@ class MainLayer():
         dg_instance = DG(self.logger, vessel, d_DG_loadlist_config, imdg_codes_df, self.__DG_Rules)
 
         self.logger.info("Extracting and saving DG LoadList...")
-        df_DG_loadlist = dg_instance.get_df_dg_loadlist(df_all_containers)
+        df_DG_loadlist = dg_instance.get_df_dg_loadlist(self.__AL, df_all_containers)
         DG_csv_name =  "DG Loadlist.csv"
         DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
         self.__DL.write_csv(df_DG_loadlist, DG_csv_path, self.__s3_bucket_out)

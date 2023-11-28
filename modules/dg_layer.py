@@ -282,7 +282,7 @@ class DG:
         
         df_DG_containers_long = df_DG_containers_long[(df_DG_containers_long['DGS_HAZARD_ID_']!="") & ~(df_DG_containers_long['DGS_HAZARD_ID_'].isna())]
         df_DG_containers_long = df_DG_containers_long.reset_index()
-        
+
         return df_DG_containers_long
     
     def __filter_columns_df_DG_loadlist(self, df_DG_loadlist:pd.DataFrame)-> pd.DataFrame:
@@ -665,8 +665,10 @@ class DG:
         df_DG_loadlist['Stowage and segregation'] = df_DG_loadlist.apply(update_stowage, axis=1)    
         return None
 
-    def get_df_dg_loadlist(self, df_all_containers:pd.DataFrame) -> pd.DataFrame:
+    def get_df_dg_loadlist(self, AL, df_all_containers:pd.DataFrame) -> pd.DataFrame:
         df_DG_loadlist = self.__get_df_DG_loadlist_exhaustive(df_all_containers)
+        AL.validate_dg_data(df_DG_loadlist)
+        
         if df_DG_loadlist.shape[0] != 0:
             df_DG_loadlist = self.__add_DG_ATT_states_to_df(df_DG_loadlist)
             df_DG_loadlist = self.__filter_columns_df_DG_loadlist(df_DG_loadlist)
