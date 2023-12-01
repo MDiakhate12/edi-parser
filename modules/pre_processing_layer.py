@@ -1994,7 +1994,7 @@ class PreProcessingLayer():
         # We also need to convert these values to float and convert them to metric tons
         df_containers["Weight"] = df_containers["Weight"].replace("", "0").astype(float) / 1000
         
-        df_containers["cWeight"] = np.where(df_containers["Weight"] <= 15, "L", "H")
+        df_containers["cWeight"] = np.where(df_containers["Weight"] <= 10, "L", "H")
         df_containers.drop(columns=["Weight_VGM", "Weight_AET"], inplace=True)
 
         return df_containers
