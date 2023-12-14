@@ -1679,10 +1679,12 @@ class PreProcessingLayer():
         d_macro_container_groups_weight_limit_l = {}
         for macro_container_group, l_weights in d_macro_container_groups_l_weights.items():
             if macro_container_group[2] == '20':
-                weight_threshold = 10.0
+                weight_threshold = 8.0
+                # weight_threshold = 10.0
                 i_weight_threshold = 100.0
             else:
-                weight_threshold = 15.0
+                weight_threshold = 10.0
+                # weight_threshold = 15.0
                 i_weight_threshold = 150.0
             # l_weights will be sorted inside next function
             #limit_l, weight_limit_l = self.__lh_split_container_group(l_weights, weight_threshold)
@@ -1994,7 +1996,7 @@ class PreProcessingLayer():
         # We also need to convert these values to float and convert them to metric tons
         df_containers["Weight"] = df_containers["Weight"].replace("", "0").astype(float) / 1000
         
-        df_containers["cWeight"] = np.where(df_containers["Weight"] <= 10, "L", "H")
+        df_containers["cWeight"] = np.where(df_containers["Weight"] <= 8, "L", "H")
         df_containers.drop(columns=["Weight_VGM", "Weight_AET"], inplace=True)
 
         return df_containers
