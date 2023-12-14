@@ -36,7 +36,7 @@ class rotation():
         rotation_intermediate_df['ShortName'] = rotation_intermediate_df['ShortName'].apply(helper)
 
     def __process_df_intermediate_rotation(self) -> dict:
-        
+
         self.rotations_intermediate['worldwide'].fillna(self.rotations_intermediate['worldwide'][0], inplace=True)
         self.rotations_intermediate['Gmhold'].fillna(self.rotations_intermediate['Gmhold'][0], inplace=True)
         self.rotations_intermediate['Gmdeck'].fillna(self.rotations_intermediate['Gmdeck'][0], inplace=True)
@@ -357,12 +357,12 @@ class rotation():
         # Add missing keys
         for port_data in d_rotation.values():
             port_data['EstimContWeight'] = ""
-            # port_data['LongName'] = port_data['ShortName']
+
             port_data['worldwide'] = '0' if port_data['worldwide'] == "UNRESTRICTED" else '1'
         
         column_order = ['Sequence', 'ShortName', 'NbCranes', 'LongName', 'CostRw20', 'CostRw40', 'CostRw45', 'SpeedSingle', 'SpeedTwin', 'DistToNext',\
             'StdFuelCons', 'StdSpeed', 'worldwide', 'Gmhold', 'Gmdeck', 'StdTimeAtBerth', 'StdTimeAtSea', 'FuelCost', 'Berth Side', 'MaxTierHeight',\
-            'MaxRowWidth', 'EstimContWeight', 'MaxDraft', 'HourlyCost', 'WindowStartTime', 'WindowEndTime', 'TimeIn', 'TimeOut']    
+            'MaxRowWidth', 'EstimContWeight', 'MaxDraft', 'HourlyCost', 'WindowStartTime', 'WindowEndTime', 'TimeIn', 'TimeOut', 'WorkDistBtwCranes']    
         # Create the DataFrame with the specified column order
         rotation_final_df = pd.DataFrame.from_dict(d_rotation, orient='index', columns=column_order)
         rotation_final_df.reset_index(drop=True, inplace=True)

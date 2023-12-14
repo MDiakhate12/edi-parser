@@ -1,11 +1,6 @@
-import pandas as pd
-import numpy as np
-import shutil
-import json
 import os
 import re
 import logging
-import bisect 
 
 from modules.common_helpers import split_list 
 from modules.data_layer import DataLayer as DL
@@ -149,7 +144,7 @@ class worst_case_baplies():
         self.logger.info("Port Calls in Rotation: %s", port_codes_sim)
         # referential folder names 
         referential_folder_name, port_codes_ref = self._get_port_calls_in_rotation(self.__referential_input, self.__s3_bucket_ref)
-        logging.info("Port Calls in Referential: %s", port_codes_ref)
+        self.logger.info("Port Calls in Referential: %s", port_codes_ref)
         
         return simulation_folder_names, port_codes_sim, referential_folder_name, port_codes_ref
     
@@ -172,7 +167,7 @@ class worst_case_baplies():
         
         for i, port in enumerate(port_codes_sim):
 
-                self.logger.info("Port: %s", port)
+                self.logger.info(f"Port: {port}")
                 
                 if port not in port_codes_ref: 
                     self.logger.info(f"Port {port} is not found in referential files for service line: {self.__service_line}...")

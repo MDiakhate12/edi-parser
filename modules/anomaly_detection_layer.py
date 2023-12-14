@@ -87,7 +87,14 @@ class AnomalyDetectionLayer():
         if keyword not in folder_list[0]:
             self.__add_single_anomaly(criticity="Error", error_value= "TBD", message=f"There no {keyword} in folder_lists {print_message}..", call_id="call_00")
             
-    
+    def check_first_call_tank_edi_file(self, file_list_in_dir: list, call_id: str) -> None:
+        if "Tank.edi" not in file_list_in_dir:
+            criticity = "Error"
+            message = f"Missing {self.__edi_file_name_baplie_type_map['tank']}, cannot initiate simulation."
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, call_id)
+            
+
     def check_loadlist_and_tank_edi_files(self, loadlist_flag: int, tank_flag: int, call_id: str) -> None:
         # the function self.__add_single_anomaly is called more than once because two of the errors can exist at once
         criticity = "Error"

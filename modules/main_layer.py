@@ -91,6 +91,7 @@ class MainLayer():
         # clear previous simulation folders
         if not self.__reuse_previous_results:
             self.__setup_in_preprocessing_layer()
+            self.__check_intermediate_ports_with_no_tank_edi()
 
         self.__after_first_call_loadlist = self.__init_params_from_folders_names()
         # intialize mapping layer
@@ -285,9 +286,10 @@ class MainLayer():
             
             port_name = folder_name_split[-1]
             self.__d_seq_num_to_port_name[seq_num] = port_name
-        
+            
         
         self.__get_port_name_and_seq_num_maps()
+        
         return after_first_call_loadlist
 
     def __output_onboard_loadlist(
@@ -734,6 +736,25 @@ class MainLayer():
         rotation_csv_destination_dir = f"{self.__dynamic_in_dir}"
         self.__DL.copy_file(rotation_csv_dir, rotation_csv_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "rotation.csv")
 
+    def __check_intermediate_ports_with_no_tank_edi(self) -> None:
+
+        self.logger.info("Checking if an intermediate ports have no Tank.edi uploaded")
+
+        existing_port_folders = self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out)
+        rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+        last_port_index_in_rotation = rotation_intermediate[rotation_intermediate['CallFolderName'].isin(existing_port_folders)].index.max()
+        l_call_folder_names = rotation_intermediate['CallFolderName'].iloc[:(last_port_index_in_rotation + 1)].to_list()
+        missing_folders = list(set(l_call_folder_names) - set(existing_port_folders))
+        reference_folder_dir = f"{self.__dynamic_in_dir}/{existing_port_folders[1]}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_dir}/{existing_port_folders[1]}"
+        l_files_first_call = self.__DL.list_files_in_path(reference_folder_dir, self.__s3_bucket_out)
+        self.__AL.check_first_call_tank_edi_file(l_files_first_call, existing_port_folders[1])
+        self.__AL.check_if_errors()
+        tank_csv_dir = f"{reference_folder_dir}/Tank.edi"
+        for folder_name in missing_folders:
+            tank_edi_destination_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+            self.__DL.copy_file(tank_csv_dir, tank_edi_destination_dir, self.__s3_bucket_out, self.__s3_bucket_out, "Tank.edi")
+        return None
+    
     def __handle_anomaly_containers_ids_in_baplies(self):
         self.logger.info("*"*80)
         self.logger.info("Checking files uploaded for missing or duplicated Container IDs...")
@@ -844,8 +865,6 @@ class MainLayer():
         self.logger.info("Getting list of POD from Baplies...")
         l_POD_profile = self.__get_pod_from_baplies_uploaded(d_csv_cols_to_segments_map, d_main_to_sub_segments_map)
         self.logger.info(f"Ports of Discharge in Baplies are : {l_POD_profile}")
-        # last_index_in_rotations = rotation_intermediate[rotation_intermediate['ShortName'].isin(l_POD_profile)].index.max()
-        # rotation_intermediate = rotation_intermediate.iloc[:(last_index_in_rotations + 1)]
         self.logger.info("*"*80)
         self.logger.info("Reading consumption csv file from referential vessels folder...")
         consumption_df = self.__DL.read_csv(self.__consumption, na_values=DEFAULT_MISSING, sep=',', s3_bucket=self.__s3_bucket_in)
@@ -975,10 +994,13 @@ class MainLayer():
                     df_attributes["EQD_SIZE_AND_TYPE_DESCRIPTION_CODE"] = df_attributes["EQD_SIZE_AND_TYPE_DESCRIPTION_CODE"].astype(str) # iso codes
 
                     if not call_port_seq_num:
+                        
                         df_filled_slots = self.__get_df_filled_slots(df_attributes)
                         self.__AL.check_dup_slots(df_filled_slots, call_id, file_type)
-
-                        l_past_POLs_names = list(set([ POL_name for POL_name in df_attributes["LOC_9_LOCATION_ID"].tolist() if POL_name.isalpha() ]))
+                        l_past_POLs_names = list(set([ POL_name for POL_name in df_attributes["LOC_9_LOCATION_ID"].tolist() if POL_name.isalpha()]))
+                    # change later back 
+                    # l_past_POLs_names = list(set([ POL_name for POL_name in df_attributes["LOC_9_LOCATION_ID"].tolist() if POL_name.isalpha()]))
+                    
                     df_attributes = self.__AL.check_and_handle_PODs_names(
                                                                     df_attributes,
                                                                     self.__d_port_name_to_seq_num,
