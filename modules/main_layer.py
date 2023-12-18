@@ -739,8 +739,14 @@ class MainLayer():
     def __check_intermediate_ports_with_no_tank_edi(self) -> None:
 
         self.logger.info("Checking if an intermediate ports have no Tank.edi uploaded")
+        existing_port_folders = []
 
-        existing_port_folders = self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out)
+        for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out))):
+            baplies_dir = f"{self.__dynamic_in_origin_dir}/{folder_name}/" if self.__s3_bucket_out == "" else f"{self.__dynamic_in_origin_dir}/{folder_name}"
+            for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+                if file_name == 'Tank.edi' or i == 0:
+                    existing_port_folders.append(folder_name)
+        # existing_port_folders = self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out)
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
         last_port_index_in_rotation = rotation_intermediate[rotation_intermediate['CallFolderName'].isin(existing_port_folders)].index.max()
         l_call_folder_names = rotation_intermediate['CallFolderName'].iloc[:(last_port_index_in_rotation + 1)].to_list()
