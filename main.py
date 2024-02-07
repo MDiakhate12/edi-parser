@@ -143,7 +143,7 @@ def lambda_handler(event, context):
 
     table_dynamoDB = os.environ['DynamoDB_TABLE_NAME']
     bucket_data_name = os.environ['S3_BUCKET_NAME']
-    bucket_ref_name = os.environ.get('s3_ref_bucket', "optistow-referential-bucket")
+    bucket_ref_name = os.environ.get('S3_REF_BUCKET_NAME')
     reuse_previous_results = event.get("reusePreviousResults", False)
 
     try:
