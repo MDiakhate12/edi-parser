@@ -376,7 +376,7 @@ class MainLayer():
             l_onboard_loadlist: list
         ) -> None:
         POL_POD_revenues_csv_name = "Revenues by Size Type POL POD.csv"
-        POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{self.__service_code}/{POL_POD_revenues_csv_name}"
+        POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{POL_POD_revenues_csv_name}"
         l_POL_POD_revenues_lines = self.__DL.read_csv_lines(POL_POD_revenues_csv_path, self.__s3_bucket_in)
 
         l_container_groups_completed_lines, l_container_groups_containers_lines \
@@ -746,7 +746,6 @@ class MainLayer():
             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
                 if file_name == 'Tank.edi' or i == 0:
                     existing_port_folders.append(folder_name)
-        # existing_port_folders = self.__DL.list_folders_in_path(self.__dynamic_in_origin_dir, self.__s3_bucket_out)
         rotation_intermediate = self.__DL.read_csv(self.__rotation_intermediate_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
         last_port_index_in_rotation = rotation_intermediate[rotation_intermediate['CallFolderName'].isin(existing_port_folders)].index.max()
         l_call_folder_names = rotation_intermediate['CallFolderName'].iloc[:(last_port_index_in_rotation + 1)].to_list()
@@ -1172,7 +1171,7 @@ class MainLayer():
         df_containers_config = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_combined_containers_final.json", self.__s3_bucket_in)
         #POL POD revenue
         POL_POD_revenues_csv_name = "Revenues by Size Type POL POD.csv"
-        POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{self.__service_code}/{POL_POD_revenues_csv_name}"
+        POL_POD_revenues_csv_path = f"{self.__service_static_in_dir}/{POL_POD_revenues_csv_name}"
         df_POL_POD_revenues = self.__DL.read_csv(POL_POD_revenues_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
 
         df_uslax_path =  f"{self.__static_in_dir}/los_angeles.csv" if self.__static_in_dir else "los_angeles.csv"
