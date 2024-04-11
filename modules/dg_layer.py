@@ -5,7 +5,7 @@ import logging
 from modules.vessel import Vessel
 
 class DG:
-    def __init__(self, logger: logging.Logger, vessel: object, DG_loadlist_config: dict, imdg_haz_exis: pd.DataFrame, DG_rule: str):
+    def __init__(self, logger: logging.Logger, vessel: object, DG_loadlist_config: dict, imdg_haz_exis: pd.DataFrame, DG_rule: str, dg_special_provisions: dict):
         self.logger = logger
         self._vessel = vessel
         self._imdg_haz_exis = imdg_haz_exis
@@ -14,6 +14,7 @@ class DG:
         self.__dg_exclusions = vessel.get_DG_exclusions()
         self.__vessel_profile = vessel.get_vessel_profile()
         self.__DG_rule = DG_rule
+        self.__dg_special_provisions = dg_special_provisions
 ## =======================================================================================================================        
 ## DG Loadlist Zone
 ## =======================================================================================================================
@@ -524,8 +525,15 @@ class DG:
         df['Stowage and segregation'] = stow
         df['SegregationGroup'] = seg
         df.set_index('index', inplace=True)
-
         return df    
+    
+    def __handle_sepecial_provisions(self, df_DG_Loadlist:pd.DataFrame) -> pd.DataFrame:
+        
+        for i, row in df_DG_Loadlist.iterrows():
+            for condition in self.__dg_special_provisions['conditions']:
+                if condition['DG_Remark_contains'] in row['Proper Shipping Name (Paragraph B of DOC)'] and row['UN'] in condition['UN_numbers']:
+                    df_DG_Loadlist.at[i, condition['impacted_field']] = condition['impacted_value']
+        return df_DG_Loadlist
     
     def __get_liquid_state(self, df_DG_loadlist:pd.DataFrame):
         df_DG_loadlist["Liquid"] = df_DG_loadlist.apply(lambda x: "x" if (x['STATE'] == "L" or "LIQUID" in x['Proper Shipping Name (Paragraph B of DOC)'].upper()
@@ -678,6 +686,7 @@ class DG:
             self.__map_packaging_group(df_DG_loadlist)
             df_DG_loadlist = self.__merge_DG_loadlist_with_imdg_code(df_DG_loadlist)
             df_DG_loadlist = self.__process_stowage_and_segregation(df_DG_loadlist)
+            df_DG_loadlist = self.__handle_sepecial_provisions(df_DG_loadlist)
             self.__get_liquid_state(df_DG_loadlist)
             self.__get_solid_state(df_DG_loadlist)
             self.__get_flammable_state(df_DG_loadlist)

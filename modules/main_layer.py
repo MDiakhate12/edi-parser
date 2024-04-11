@@ -1125,15 +1125,14 @@ class MainLayer():
         imdg_codes_list_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv" if self.__static_in_dir else "hz_imdg_exis_subs.csv"
         imdg_codes_df = self.__DL.read_csv(imdg_codes_list_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str) 
         d_DG_loadlist_config = self.__DL.read_json(f"{self.__jsons_static_in_dir}/DG_loadlist_config.json", self.__s3_bucket_in)
-
-        dg_instance = DG(self.logger, vessel, d_DG_loadlist_config, imdg_codes_df, self.__DG_Rules)
+        d_DG_special_provisions = self.__DL.read_json(f"{self.__jsons_static_in_dir}/dg_special_provisions.json", self.__s3_bucket_in)
+        dg_instance = DG(self.logger, vessel, d_DG_loadlist_config, imdg_codes_df, self.__DG_Rules, d_DG_special_provisions)
 
         self.logger.info("Extracting and saving DG LoadList...")
         df_DG_loadlist = dg_instance.get_df_dg_loadlist(self.__AL, df_all_containers)
         DG_csv_name =  "DG Loadlist.csv"
         DG_csv_path = f"{self.__py_scripts_out_dir}/{DG_csv_name}"
         self.__DL.write_csv(df_DG_loadlist, DG_csv_path, self.__s3_bucket_out)
-
         self.logger.info("Extracting and saving DG LoadList Exclusion...")
         df_loadlist_exclusions = dg_instance.get_dg_exclusions(df_DG_loadlist)
         DG_csv_name =  "DG Loadlist Exclusions.csv"
