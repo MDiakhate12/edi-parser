@@ -428,7 +428,6 @@ class Lashing():
         return absolute_max
 
     def __lashing_calculations(self, call_0_dataframe:pd.DataFrame, POD_0:str) -> pd.DataFrame:    
-        
         # vessel.display_info()
         # open containers file call_00_00 
         # path = r'C:\Users\BRT.AFARHAT12\OneDrive - CMA CGM\Desktop\git_repos\OptiStow_lambda_func_local\vas-data\service_input_output\data\simulations\testscript_03-04-2023-Baptisite-02\intermediate\00_THLCH_container.csv'
@@ -495,6 +494,7 @@ class Lashing():
             # Filter the DataFrame based on the condition
             lashing_df = lashing_df[mask]
             self._logger.info(f"Removing {containers_bay.shape[0] - lashing_df.shape[0]} Containers...")
+
         # in case no containers left onBoard
         if not lashing_df.shape[0]:
             grouped_df = pd.DataFrame(columns=['BAY', 'ROW', 'Racking Forces Absolute Max(<150 KN)', 'Racking Pitch Forces Absolute Max(<100 KN)', 
@@ -740,7 +740,7 @@ class Lashing():
                 if rg <= 1:
                     e1_0 = e2_0 = e3_0 = l1_0 = l2_2 = Kl1_0 = Kl2_0 = Kl3_0 = 0
                     dlb_0, llength1_0, llength2_0, llength3_0, Klhh1_0, Klhh2_0, Klhh3_0, Klvv1_0, Klvv2_0, Klvv3_0, Klvh1_0, Klvh2_0, Klvh3_0, deltaZ1_0, deltaZ2_0, deltaZ3_0, deltaY1_0, deltaY2_0, deltaY3_0 = [[0] * (2 * int(rg)) for _ in range(19)]
-                    
+                
                 # LASHING FOR 20s
                 # external rows, lashing from hatchcover, wind applied from hatchcover center towards seaside
                 if rg > 1:
@@ -1065,7 +1065,7 @@ class Lashing():
                     e1_7 = e2_7 = l1_7 = l2_7 = Kl1_7 = Kl2_7 = 0
                     
                     dlb_7 = [35] * (2 * int(rg))
-                    llength1_7, Klhh1_7, Klvv1_7, Klvh1_7, deltaZ1_7, deltaY1_7, llength2_7, Klhh2_7, Klvv2_7, Klvh2_7, deltaZ2_7, deltaY2_7 = [[0] * (2 * int(rg)) for _ in range(12)]
+                    llength1_7, Klhh1_7, Klhh1_7_2014, Klhh2_7_2014,Klvh1_7_2014, Klvh2_7_2014, Klvv1_7, Klvh1_7, deltaZ1_7, deltaY1_7, llength2_7, Klhh2_7, Klvv2_7, Klvh2_7, deltaZ2_7, deltaY2_7 = [[0] * (2 * int(rg)) for _ in range(16)]
 
                 # LASHING FOR 40s
                 # external rows, lashing from lashing bridge(from 4th tier) (pattern 1)
@@ -1474,10 +1474,11 @@ class Lashing():
 
             #         DELTALBFORE = dlb_7
                     EMODULEFORE = [e1_7,e2_7]
-
+    
                 # LASHING FOR 40s (2014) FORE (pattern 3)
                 # internal rows, lashing from lashing bridge(from 4th tier).For external rows wind applied from hatchcover center towards seaside.
                 if lash_bridge_fore == 38.1 and row['Bay Type'] == 'bay40' and lashing_dict['BV_rules']=='2014':
+                    
                     KLHHFORE = KLHHFORE_2014 = np.array(Klhh1_7_2014[:(2 * int(rg))]) + np.array(Klhh2_7_2014[:(2 * int(rg))])
                     KLVHFORE = KLVHFORE_2014 = np.array(Klvh1_7_2014[:(2 * int(rg))]) + np.array(Klvh2_7_2014[:(2 * int(rg))])
                     KLVVFORE = np.array(Klvv1_7[:(2 * int(rg))]) + np.array(Klvv2_7[:(2 * int(rg))])
@@ -1493,6 +1494,7 @@ class Lashing():
                 # external rows, lashing from lashing bridge(from 4th tier). For external rows wind applied from seaside to hatch cover centre.
 
                 if lash_bridge_fore == 38.1 and row['Bay Type'] == 'bay40' and row['ROW'] in exterior_rows_per_bay[row['BAY']] and lashing_dict['wind_side']=='out_in':
+
                     KLHHFORE = KLHHFORE_2014 = np.array(Klhh3_14[:(2 * int(rg))]) + np.array(Klhh3_15[:(2 * int(rg))]) + np.array(Klhh3_12[:(2 * int(rg))]) + np.array(Klhh3_13[:(2 * int(rg))])
                     KLVHFORE = KLVHFORE_2014 = np.array(Klvh3_14[:(2 * int(rg))]) + np.array(Klvh3_15[:(2 * int(rg))]) + np.array(Klvh3_12[:(2 * int(rg))]) + np.array(Klvh3_13[:(2 * int(rg))])
                     KLVVFORE = np.array(Klvv3_14[:(2 * int(rg))]) + np.array(Klvv3_15[:(2 * int(rg))]) + np.array(Klvv3_12[:(2 * int(rg))]) + np.array(Klvv3_13[:(2 * int(rg))])
@@ -1686,6 +1688,7 @@ class Lashing():
                 # LASHING FOR 40s (2014) AFT
                 # internal rows, lashing from lashing bridge(from 4th tier).For external rows wind applied from hatchcover center towards seaside.
                 if lash_bridge_aft == 38.1 and row['Bay Type'] == 'bay40' and lashing_dict['BV_rules']=='2014':
+
                     KLHHAFT = KLHHAFT_2014 = np.array(Klhh1_7_2014[:(2 * int(rg))]) + np.array(Klhh2_7_2014[:(2 * int(rg))])
                     KLVHAFT = KLVHAFT_2014 = np.array(Klvh1_7_2014[:(2 * int(rg))]) + np.array(Klvh2_7_2014[:(2 * int(rg))])
                     KLVVAFT = np.array(Klvv1_7[:(2 * int(rg))]) + np.array(Klvv2_7[:(2 * int(rg))])
