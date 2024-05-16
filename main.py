@@ -19,6 +19,17 @@ class CustomAdapter(logging.LoggerAdapter):
     def process(self, msg, kwargs):
         return '[%s] %s' % (self.extra['simu_id'], msg), kwargs 
 
+
+class ListHandler(logging.Handler):
+    def __init__(self):
+        super().__init__()
+        self.log_records = []
+
+    def emit(self, record):
+        # Append the formatted log message to the list
+        self.log_records.append(self.format(record))
+
+
 def configure_logger(simulation_id: str):
     """
     Configure a logger with a custom adapter to prepend the simulation ID to log messages.
@@ -41,9 +52,18 @@ def configure_logger(simulation_id: str):
     """
     logger_config = logging.getLogger(__name__)
     logger_config.setLevel(logging.INFO)
-    return CustomAdapter(logger_config, {'simu_id': simulation_id})
 
-def log_and_store_error(e: Exception, err_msg: str, simu_id:str, event:dict, s3_bucket:str="") -> None:
+    # Create and add the list handler
+    list_handler = ListHandler()
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    list_handler.setFormatter(formatter)
+    logger_config.addHandler(list_handler)
+
+    return CustomAdapter(logger_config, {'simu_id': simulation_id}), list_handler
+
+
+
+def log_and_store_error(err_msg:str, e:str, simu_id:str, event:dict, list_logger, s3_bucket:str="") -> None:
     """
     Log the error to the console and store the detailed error message in an S3 bucket.
 
@@ -69,18 +89,20 @@ def log_and_store_error(e: Exception, err_msg: str, simu_id:str, event:dict, s3_
     logger.error(err_msg)
     logger.error(e, exc_info=True)
 
-    error_content = str(e) if "errorNo" not in str(e) else ""
-    context_details = {
-        'event': event,
-        'traceback': error_content or traceback.format_exc()
-    }
+    # error_content = str(e) if "errorNo" not in str(e) else ""
+    # context_details = {
+    #     'event': event,
+    #     'traceback': error_content or traceback.format_exc()
+    # }
+    # log_content = (f"{err_msg} \n{str(e)} \n\n Lambda trigger event: {context_details['event']} "
+    #                f"\n\n{context_details['traceback']}")
+    
+    log_content = "\n".join(list_logger.log_records)
 
-    log_content = (f"{err_msg} \n{str(e)} \n\n Lambda trigger event: {context_details['event']} "
-                   f"\n\n{context_details['traceback']}")
     log_path = f'{simu_id}/out/error.txt'
     log_to_s3(logger, s3_bucket, log_path, log_content)
 
-def handle_error(e: Exception, event: dict, bucket_data_name: str, table_dynamoDB: str, reuse_previous_results: bool):
+def handle_error(e:str, event: dict, bucket_data_name: str, table_dynamoDB: str, reuse_previous_results: bool, list_logger):
     """
     Handle exceptions by logging the error, storing details in S3, and writing records to DynamoDB.
 
@@ -116,7 +138,7 @@ def handle_error(e: Exception, event: dict, bucket_data_name: str, table_dynamoD
         write_records_dynamoDB(logger, bucket_data_name, simulation_id, table_dynamoDB, target_key, status='PRE-KO')
         err_msg = "There was an error while running the lambda handler for Pre_Processing..."
     
-    log_and_store_error(e, err_msg, simulation_id, event, bucket_data_name)
+    log_and_store_error(err_msg, e, simulation_id, event, list_logger, bucket_data_name)
     return 400
 
 def lambda_handler(event, context):
@@ -139,7 +161,7 @@ def lambda_handler(event, context):
     global logger, s3_resource, dynamodb
     s3_resource = resource('s3')
     dynamodb = resource('dynamodb')
-    logger = configure_logger(event["simulation_id"])
+    logger, list_handler = configure_logger(event["simulation_id"])
 
     table_dynamoDB = os.environ['DynamoDB_TABLE_NAME']
     bucket_data_name = os.environ['S3_BUCKET_NAME']
@@ -158,13 +180,15 @@ def lambda_handler(event, context):
         return {"statusCode": 200}
 
     except Exception as e:
-        status_code = handle_error(e, event, bucket_data_name, table_dynamoDB, reuse_previous_results)
+        logger.error("There was an error while executing pre-processing..." if not reuse_previous_results else "There was an error while executing post-processing..." )
+        # logger.error(e, exc_info=True)
+        status_code = handle_error(e, event, bucket_data_name, table_dynamoDB, reuse_previous_results, list_handler)
         return {"statusCode": status_code}
 
 def main():
     with open("./event_local.json", "r") as file:
         event = json.load(file)
-    logger = configure_logger(event["simulation_id"])
+    logger, list_handler= configure_logger(event["simulation_id"])
     try:
         main_layer = MainLayer(logger, event, event.get("reusePreviousResults", False))
         main_layer.run_main()
@@ -172,7 +196,6 @@ def main():
     except Exception as e:
         logger.error("There was an error while pre-processing the data...")
         logger.error(e, exc_info=True)
-
 
 if __name__ == "__main__":
     main()

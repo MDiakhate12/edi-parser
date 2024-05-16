@@ -1100,16 +1100,6 @@ class MainLayer():
             port_containers_csv_path = f"{self.__py_scripts_out_dir}/{port_containers_csv_name}"
             self.__DL.write_csv(df, port_containers_csv_path, s3_bucket=self.__s3_bucket_out)
 
-        #lashing
-        self.logger.info(f"Calculating Lashing forces for Onboard Containers...")
-        lashing_df = lashing.perform_lashing_calculations(l_dfs_containers[0], l_containers_folder_names[1][-5:])
-        lashing_csv_name = f"on_board_lashing.csv"
-        self.logger.info("*"*80)
-
-        self.logger.info(f"Saving OnBoard lashing Calculation...")
-        lashing_csv_path = f"{self.__py_scripts_out_dir}/{lashing_csv_name}"
-        self.__DL.write_csv(lashing_df, lashing_csv_path, s3_bucket=self.__s3_bucket_out)
-
         for i, df in enumerate(l_dfs_tanks):
             port_tanks_csv_name = f"{l_tanks_folder_names[i]}_tank.csv"
             port_tanks_csv_path = f"{self.__py_scripts_out_dir}/{port_tanks_csv_name}"
@@ -1164,6 +1154,17 @@ class MainLayer():
             all_tanks_csv_name = "csv_combined_tanks.csv"
             all_tanks_csv_path = f"{self.__py_scripts_out_dir}/{all_tanks_csv_name}"
             self.__DL.write_csv(df_tanks_final, all_tanks_csv_path, s3_bucket=self.__s3_bucket_out)
+
+        #lashing
+        self.logger.info("*"*80)
+        self.logger.info(f"Calculating Lashing forces for Onboard Containers...")
+        lashing_df = lashing.perform_lashing_calculations(l_dfs_containers[0], l_containers_folder_names[1][-5:])
+        lashing_csv_name = f"on_board_lashing.csv"
+        self.logger.info("*"*80)
+
+        self.logger.info(f"Saving OnBoard lashing Calculation...")
+        lashing_csv_path = f"{self.__py_scripts_out_dir}/{lashing_csv_name}"
+        self.__DL.write_csv(lashing_df, lashing_csv_path, s3_bucket=self.__s3_bucket_out)
 
         #containers final 
         self.logger.info("Generating final containers.csv file...")

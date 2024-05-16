@@ -242,6 +242,7 @@ class Lashing():
                 "4": 2.743,
                 "D": 2.743,
                 "M": 2.743,
+                "P": 2.895,
                 "5": 2.895,
                 "E": 2.895,
                 "N": 2.895, 
@@ -249,7 +250,7 @@ class Lashing():
                 "9":1.219
             }
         
-        dimensions = []
+        dimensions, not_found_dimensions = [], []
 
         for code in codes:
             length_code = code[0]
@@ -260,8 +261,11 @@ class Lashing():
                 height = height_codes[height_code]
                 dimensions.append([length, height])
             else:
+                not_found_dimensions.append(code)
                 self._logger.error(f"could not match {code} container type to height or length....")
-                raise ValueError("Invalid length code or height code for old ISO format")
+            
+        if len(not_found_dimensions):
+            raise ValueError(f"Invalid length code or height code for old ISO format for the following: {not_found_dimensions}")
             
         return dimensions
 

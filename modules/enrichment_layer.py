@@ -48,6 +48,7 @@ class EnrichmentLayer():
         -------
         None
         """
+
         for i in range(len(this_header_csv_cols_list)):
             self.dict_of_cols_values[this_header_csv_cols_list[i]].append(vars_list[i])
 
@@ -121,6 +122,7 @@ class EnrichmentLayer():
         EQD_private_sub_headers.append("EQD")
 
         for container_data in containers_data_list:
+
             # setting counters for headers that might be repeated: some headers that might be repeated will not have a count as they can
             # be distinguished using an attribute from within the header
             LOC_identifier_FTX_count = 0
@@ -545,6 +547,7 @@ class EnrichmentLayer():
         with LOC (with LOC belonging to segment group 8: different than LOC+147), i.e., segments to identify a
         geographical location related to a unit of equipment or un-containerized cargo (p. 68).
         """
+
         vars_list = []
         if len(segment_split) > 3:
             segment_split = segment_split[:3] # sanity check for unwanted values
@@ -554,7 +557,7 @@ class EnrichmentLayer():
                 vars_list.append(var)
                 
             else:
-                if len(var):                
+                if len(var):          
 
                     vals = var.split(":")
                     vals_len = len(vals)
@@ -565,8 +568,9 @@ class EnrichmentLayer():
                         var_three = vals[2]
 
                     elif vals_len == 2:
-
+                        print("here")
                         if vals[1].isdigit():
+                            
                             if len(vals[0]) == 5:
                                 var_one = ""
                                 var_two = vals[0]
@@ -578,8 +582,10 @@ class EnrichmentLayer():
                             var_three = vals[1]
                         
                         else:
+                            print("there")
                             var_one = vals[0]
                             var_two = vals[1]
+                            var_three = ""
 
                     else:
                         if vals[0].isdigit():

@@ -469,15 +469,48 @@ class DG:
         
         # Concat both dataframes
         df_DG_loadlist = pd.concat([df_matched, df_not_matched],ignore_index=True) 
-        df_copy1 = df_DG_loadlist.copy()
+
+        # 2nd merge trial
+        # check and handle duplicates of same stowage category for DG matching a category from imdg code
+        df_matched_second_merge = df_DG_loadlist.drop(df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()].index.to_list())
+        df_not_matched_second_merge = df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()]
+        df_not_matched_second_merge = df_not_matched_second_merge[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
+            'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Limited Quantity',
+            'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SetPoint', 'Package Goods', 'Stowage Category']]
+
+        # Perform another merge attempt on different conditions
+        df_not_matched_second_merge = df_not_matched_second_merge.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
+                            how='left' ,left_on=['Ammendmant Version','UN'], right_on= ['IMDG_AMENDMENT','UNNO'])
+
+        # Update Stowage Category based on the second merge attempt
+        df_not_matched_second_merge['Stowage Category'] = df_not_matched_second_merge['STOWCAT']
+        df_not_matched_second_merge["PGr"] = df_not_matched_second_merge["PGr"].fillna(df_not_matched_second_merge["PG"])
+        # Drop duplicates after the second merge
+        df_not_matched_second_merge.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
+                                                    "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight",
+                                                    "PGr", "UN", "Stowage Category"], keep='first', inplace=True)
+
+        # Reset index
+        df_not_matched_second_merge.reset_index(drop=True, inplace=True)
+
+        # Concatenate both dataframes
+        df_DG_loadlist_final = pd.concat([df_matched_second_merge, df_matched_second_merge], ignore_index=True)
+
+        # # Reset index for the final DataFrame
+        df_DG_loadlist_final.reset_index(drop=True, inplace=True)
+
+
+        df_copy1 = df_DG_loadlist_final.copy()
         df_copy1['Stowage Category'] = df_copy1['Stowage Category'].map(lambda x: str(x))
         df_copy1.reset_index(inplace= True, drop=True)
+        
         #Stowage Category order from most to least critical 
         sort_order= ["1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]
         # Group By Serial Number and order in decreasing criticality
         df_copy1= df_copy1.groupby(["Serial Number", "POL", "POD", "Class", "SubLabel1", "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight", "PGr", "UN"],group_keys= False).apply(lambda x: x.sort_values(by="Stowage Category", key=lambda y: [sort_order.index(v) for v in y], ascending=True))
         # df_copy1.set_index("level_0", inplace=True)
         # Keep first row which is most critical
+        
         df_copy1.drop_duplicates(subset = ["Serial Number", "POL", "POD", "Class", "SubLabel1", "PGr", "UN"], keep='first', inplace=True)
         df_DG_loadlist = df_copy1
         df_DG_loadlist.reset_index(inplace=True)
@@ -525,6 +558,7 @@ class DG:
         df['Stowage and segregation'] = stow
         df['SegregationGroup'] = seg
         df.set_index('index', inplace=True)
+
         return df    
     
     def __handle_sepecial_provisions(self, df_DG_Loadlist:pd.DataFrame) -> pd.DataFrame:
@@ -534,6 +568,7 @@ class DG:
                 if condition['DG_Remark_contains'] in row['Proper Shipping Name (Paragraph B of DOC)'] and row['UN'] in condition['UN_numbers']:
                     df_DG_Loadlist.at[i, condition['impacted_field']] = condition['impacted_value']
         return df_DG_Loadlist
+    
     
     def __get_liquid_state(self, df_DG_loadlist:pd.DataFrame):
         df_DG_loadlist["Liquid"] = df_DG_loadlist.apply(lambda x: "x" if (x['STATE'] == "L" or "LIQUID" in x['Proper Shipping Name (Paragraph B of DOC)'].upper()
@@ -1105,11 +1140,14 @@ class DG:
         return df
 
     def __get_DG_category(self, row) -> str:
+
         if pd.isna(row['flash_point']):
-            row['flash_point'] = None
+            row['flash_point'] = 0  # Assuming flash point as 0 for null values
+        # if pd.isna(row['flash_point']):
+        #     row['flash_point'] = None
         if ( row['un_no'] in self.__DG_loadlist_config['l_IMDG_Class_1_S'])\
         or (row['imdg_class'] == '6.1' and row['solid'] == True and row['as_closed'] == True)\
-        or (row['imdg_class'] == '8' and row['liquid'] == True and row['flash_point'] is None)\
+        or (row['imdg_class'] == '8' and row['liquid'] == True and row['flash_point'] == 0)\
         or (row['imdg_class'] == '8' and row['solid'] == True)\
         or (row['imdg_class'] == '9' and row['as_closed'] == True):
             return 'PPP'
@@ -1119,13 +1157,13 @@ class DG:
         or (row['imdg_class'] == '3' and row['flash_point'] >= 23 )\
         or (row['imdg_class'] == '4.1' and row['as_closed'] == True)\
         or (row['imdg_class'] == '4.2' and row['as_closed'] == True)\
-        or (row['imdg_class'] == '4.3' and row['liquid'] == True and row['as_closed'] == True and (row['flash_point'] >= 23 or row['flash_point'] is None))\
+        or (row['imdg_class'] == '4.3' and row['liquid'] == True and row['as_closed'] == True and (row['flash_point'] >= 23 or row['flash_point'] == 0))\
         or (row['imdg_class'] == '4.3' and row['solid'] == True and row['as_closed'] == True)\
         or (row['imdg_class'] == '5.1' and row['as_closed'] == True)\
         or (row['imdg_class'] == '8' and row['liquid'] == True and row['as_closed'] == True and row['flash_point'] >= 23 and row['flash_point'] <= 60):
             return 'PP'
         
-        if (row['imdg_class'] == '6.1' and row['liquid'] == True and row['flash_point'] is None):
+        if (row['imdg_class'] == '6.1' and row['liquid'] == True and row['flash_point'] == 0):
             return 'PX'
         
         if (row['imdg_class'] == '6.1' and row['liquid'] == True and row['flash_point'] >= 23 and row['flash_point'] <= 60 and row['as_closed'] == True):
@@ -1605,7 +1643,3 @@ class DG:
             df_cg_exclusion_zones = pd.DataFrame(columns=['LoadPort','DischPort','Size','cType','cWeight','Height','idZone','Subbay'])
             df_cg_exclusion_zones_nb_dg = pd.DataFrame(columns=['LoadPort','DischPort','Size','cType','cWeight','Height','idZone','NbDG'])
         return df_cg_exclusion_zones, df_cg_exclusion_zones_nb_dg
-
-
-
-
