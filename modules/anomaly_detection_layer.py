@@ -825,7 +825,7 @@ class AnomalyDetectionLayer():
 
     def check_reefer_containers_at_non_reefer_slots(self, l_reefers_at_non_reefer: list) -> None:
         if len(l_reefers_at_non_reefer):
-            criticity = "Error"
+            criticity = "Warning"
             error_value = "TBD"
             message = self.__get_full_msg("that is a reefer and placed in a non-reefer slot")
             for container_info in l_reefers_at_non_reefer:
