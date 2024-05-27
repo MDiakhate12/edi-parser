@@ -1145,9 +1145,10 @@ class DG:
             row['flash_point'] = 0  # Assuming flash point as 0 for null values
         # if pd.isna(row['flash_point']):
         #     row['flash_point'] = None
+        # higher flashpoint means it's safer
         if ( row['un_no'] in self.__DG_loadlist_config['l_IMDG_Class_1_S'])\
         or (row['imdg_class'] == '6.1' and row['solid'] == True and row['as_closed'] == True)\
-        or (row['imdg_class'] == '8' and row['liquid'] == True and row['flash_point'] == 0)\
+        or (row['imdg_class'] == '8' and row['liquid'] == True and ((row['flash_point'] == 0)  or (row['flash_point'] > 60)))\
         or (row['imdg_class'] == '8' and row['solid'] == True)\
         or (row['imdg_class'] == '9' and row['as_closed'] == True):
             return 'PPP'
