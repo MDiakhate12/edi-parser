@@ -171,9 +171,9 @@ def lambda_handler(event, context):
     try:
         
         if not reuse_previous_results:
-            write_records_dynamoDB(logger, bucket_data_name, event["simulation_id"], table_dynamoDB, status='PRE_START')
+            write_records_dynamoDB(logger, bucket_data_name, event["simulation_id"], table_dynamoDB, status='PRE-START')
         else:
-            write_records_dynamoDB(logger, bucket_data_name, event["simulation_id"], table_dynamoDB, status='POST_START')
+            write_records_dynamoDB(logger, bucket_data_name, event["simulation_id"], table_dynamoDB, status='POST-START')
             
         main_layer = MainLayer(logger, event, reuse_previous_results, bucket_data_name, bucket_ref_name)
         main_layer.run_main()
