@@ -1140,11 +1140,13 @@ class DG:
         return df
 
     def __get_DG_category(self, row) -> str:
-
         if pd.isna(row['flash_point']):
-            row['flash_point'] = 0  # Assuming flash point as 0 for null values
-        # if pd.isna(row['flash_point']):
-        #     row['flash_point'] = None
+            if row['imdg_class'] == '3':
+                self.logger.warn(f"The container {row['container_id']} is DG of class 3 and has no flash point. We set it by default to 30°.")
+                row['flash_point'] = 30 # set flash point to 30deg if not defined and container class is 3
+            else:
+                row['flash_point'] = 0  # Assuming flash point as 0 for null values
+
         # higher flashpoint means it's safer
         if ( row['un_no'] in self.__DG_loadlist_config['l_IMDG_Class_1_S'])\
         or (row['imdg_class'] == '6.1' and row['solid'] == True and row['as_closed'] == True)\
