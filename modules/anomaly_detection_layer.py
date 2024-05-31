@@ -832,6 +832,12 @@ class AnomalyDetectionLayer():
                 container_id = container_info[1]
                 self.__add_single_anomaly(criticity, message, error_value, container_id=container_id)
 
+    def check_distance_to_next_port_is_zero(self, port_name: list) -> None:
+        criticity = "Warning"
+        error_value = "TBD"
+        message = self.__get_full_msg(f"Distance to next port from {port_name} is 0. Default FuelCost and min/max speed will then be set to 0.")
+        self.__add_single_anomaly(criticity, message, error_value, container_id=container_id)
+
 
     def check_missing_ports(self, rotation_intermediate, cranes_csv) -> None:
         missing_ports = []
