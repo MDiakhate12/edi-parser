@@ -223,11 +223,13 @@ class rotation():
 
         distance_to_next = d_rotation[port_name]["DistToNext"]
         time_max_min_diff_hours = time_max - time_min
-        speed_min_temp = distance_to_next / (time_diff_hours + time_max_min_diff_hours)
+        if (time_diff_hours + time_max_min_diff_hours) == 0:
+            speed_min_temp = speed_max_temp = 0.0 
+        else:
+            speed_min_temp = distance_to_next / (time_diff_hours + time_max_min_diff_hours)
+            speed_max_temp = distance_to_next / time_diff_hours
         speed_min = max([8, speed_min_temp])
         speed_min_rounded = round(speed_min, 2)
-
-        speed_max_temp = distance_to_next / time_diff_hours
         speed_max = max([8, speed_max_temp])
         speed_max_rounded = round(speed_max, 2)
 
@@ -271,20 +273,24 @@ class rotation():
             else: 
                 fuel_plan[preferred_fuel_type_long_leg] += remaining_distance
         
-        # Calculate the percentage of each fuel type against the total distance
-        percentage_fuel_plan = {fuel_type: (fuel_distance / distance_nm) for fuel_type, fuel_distance in fuel_plan.items()}
-        # Convert Fuel Cost in dictionary into floats
-        fuel_cost_float = {fuel: float(cost) for fuel, cost in self.fuel_data_dict.items()}
-        # Filter fuel_cost_float to remove 'LNG' key
-        fuel_cost_float = {fuel: cost for fuel, cost in fuel_cost_float.items() if fuel in percentage_fuel_plan}
-        # Calculate the weighted cost for each fuel type
-        weighted_costs = {fuel: cost * percentage_fuel_plan[fuel] for fuel, cost in fuel_cost_float.items()}
-        # Calculate the total weighted cost
-        total_weighted_cost = sum(weighted_costs.values())
-        # Calculate the weighted average cost
-        weighted_average_cost = total_weighted_cost / sum(percentage_fuel_plan.values())
-        
-        d_rotation[port_name]['FuelCost'] = weighted_average_cost
+        if distance_nm != 0:
+            # Calculate the percentage of each fuel type against the total distance
+            percentage_fuel_plan = {fuel_type: (fuel_distance / distance_nm) for fuel_type, fuel_distance in fuel_plan.items()}
+            # Convert Fuel Cost in dictionary into floats
+            fuel_cost_float = {fuel: float(cost) for fuel, cost in self.fuel_data_dict.items()}
+            # Filter fuel_cost_float to remove 'LNG' key
+            fuel_cost_float = {fuel: cost for fuel, cost in fuel_cost_float.items() if fuel in percentage_fuel_plan}
+            # Calculate the weighted cost for each fuel type
+            weighted_costs = {fuel: cost * percentage_fuel_plan[fuel] for fuel, cost in fuel_cost_float.items()}
+            # Calculate the total weighted cost
+            total_weighted_cost = sum(weighted_costs.values())
+            # Calculate the weighted average cost
+            weighted_average_cost = total_weighted_cost / sum(percentage_fuel_plan.values())
+            
+            d_rotation[port_name]['FuelCost'] = weighted_average_cost
+        else:
+            self.logger.warn(f"Distance to next port from {port_name} is 0. Default FuelCost and min/max speed will then be set to 0.")
+            d_rotation[port_name]['FuelCost'] = 0.0
                    
     def __add_hourly_cost_to_d_rotation(
             self,
