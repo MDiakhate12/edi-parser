@@ -445,12 +445,13 @@ class DG:
         
         
         # check and handle duplicates of same stowage category for DG matching a category from imdg code
-        df_matched = df_DG_loadlist.drop(df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()].index.to_list())
+        unmatched_condition = lambda df: df['Stowage Category'].isnull() | (df['Stowage Category'] == "")
+        df_matched = df_DG_loadlist.drop(df_DG_loadlist[unmatched_condition(df_DG_loadlist)].index.to_list())
         df_matched = df_matched.reset_index(drop=True)
         
         
         # get DG Goods that did not match to any category from imdg code 
-        df_not_matched = df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()]
+        df_not_matched = df_DG_loadlist[unmatched_condition(df_DG_loadlist)]
         df_not_matched = df_not_matched[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
         'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Limited Quantity',
         'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SetPoint', 'Package Goods', 'Stowage Category']]
@@ -472,8 +473,8 @@ class DG:
 
         # 2nd merge trial
         # check and handle duplicates of same stowage category for DG matching a category from imdg code
-        df_matched_second_merge = df_DG_loadlist.drop(df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()].index.to_list())
-        df_not_matched_second_merge = df_DG_loadlist[df_DG_loadlist['Stowage Category'].isnull()]
+        df_matched_second_merge = df_DG_loadlist.drop(df_DG_loadlist[unmatched_condition(df_DG_loadlist)].index.to_list())
+        df_not_matched_second_merge = df_DG_loadlist[unmatched_condition(df_DG_loadlist)]
         df_not_matched_second_merge = df_not_matched_second_merge[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
             'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Limited Quantity',
             'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SetPoint', 'Package Goods', 'Stowage Category']]
@@ -507,7 +508,17 @@ class DG:
         #Stowage Category order from most to least critical 
         sort_order= ["1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]
         # Group By Serial Number and order in decreasing criticality
-        df_copy1= df_copy1.groupby(["Serial Number", "POL", "POD", "Class", "SubLabel1", "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight", "PGr", "UN"],group_keys= False).apply(lambda x: x.sort_values(by="Stowage Category", key=lambda y: [sort_order.index(v) for v in y], ascending=True))
+        df_copy1= df_copy1\
+            .groupby(
+                ["Serial Number", "POL", "POD", "Class", "SubLabel1", "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight", "PGr", "UN"],
+                group_keys= False
+            )\
+            .apply(lambda x: x)\
+            .sort_values(
+                by="Stowage Category", 
+                key=lambda y: [sort_order.index(v) for v in y],
+                ascending=True 
+            )
         # df_copy1.set_index("level_0", inplace=True)
         # Keep first row which is most critical
         
