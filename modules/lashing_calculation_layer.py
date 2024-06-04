@@ -1455,7 +1455,11 @@ class Lashing():
 
                 # LASHING FOR 40s (2014) FORE (pattern 3)
                 # internal rows, lashing from lashing bridge(from 3rd tier).For external rows wind applied from hatchcover center towards seaside.
-                if lash_bridge_fore == 37.8 and row['Bay Type'] == 'bay40' and row['ROW'] not in exterior_rows_per_bay[row['BAY']] and lashing_dict['BV_rules'] =='2014':
+                if (lash_bridge_fore == 37.8)\
+                      and (row['Bay Type'] == 'bay40')\
+                      and (row['ROW'] not in exterior_rows_per_bay[row['BAY']])\
+                      and (rg > 3)\
+                      and (lashing_dict['BV_rules'] =='2014'):
                     KLHHFORE = KLHHFORE_2014 = np.array(Klhh1_6_2014[:(2 * int(rg))]) + np.array(Klhh2_6_2014[:(2 * int(rg))])
                     KLVHFORE = KLVHFORE_2014 = np.array(Klvh1_6_2014[:(2 * int(rg))]) + np.array(Klvh2_6_2014[:(2 * int(rg))])
                     KLVVFORE = np.array(Klvv1_6[:(2 * int(rg))]) + np.array(Klvv2_6[:(2 * int(rg))])
@@ -1666,7 +1670,11 @@ class Lashing():
 
                 # LASHING FOR 40s (2014) AFT
                 # internal rows, lashing from lashing bridge(from 3rd tier).For external rows wind applied from hatchcover center towards seaside.
-                if lash_bridge_aft == 37.8 and row['Bay Type'] == 'bay40' and row['ROW'] not in exterior_rows_per_bay[row['BAY']]  and lashing_dict['BV_rules']=='2014':
+                if (lash_bridge_aft == 37.8) \
+                    and (row['Bay Type'] == 'bay40') \
+                    and (row['ROW'] not in exterior_rows_per_bay[row['BAY']]) \
+                    and (rg > 3) \
+                    and (lashing_dict['BV_rules']=='2014'):
                     KLHHAFT = KLHHAFT_2014 = np.array(Klhh1_6_2014[:(2 * int(rg))]) + np.array(Klhh2_6_2014[:(2 * int(rg))])
                     KLVHAFT = KLVHAFT_2014 = np.array(Klvh1_6_2014[:(2 * int(rg))]) + np.array(Klvh2_6_2014[:(2 * int(rg))])
                     KLVVAFT = np.array(Klvv1_6[:(2 * int(rg))]) + np.array(Klvv2_6[:(2 * int(rg))])
