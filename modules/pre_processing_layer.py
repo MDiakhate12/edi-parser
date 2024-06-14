@@ -2054,7 +2054,12 @@ class PreProcessingLayer():
 
                 # Convert NaNs to 0 before conversion to integers
                 df_combined_containers[col].fillna(0, inplace=True)
+
+                # store measures for OOG_LEFT and OOG_RIGHT
+                if col in ["OOG_LEFT", "OOG_RIGHT"]:
+                    df_combined_containers[f"{col}_MEASURE"] = df_combined_containers[col]
                 
+                # convert OOG measures into booleans
                 df_combined_containers[col] = (df_combined_containers[col].astype(int) > 0).astype(int)
             else:
                 df_combined_containers[col] = 0
@@ -2390,7 +2395,7 @@ class PreProcessingLayer():
             "priorityID", "priorityLevel",
             "overstowPort", "NonReeferAtReefer",
             "Subport", "Stowage", "DGheated", "Exclusion",
-            "OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_LEFT", "OOG_TOP", "OOG_TOP_MEASURE"
+            "OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_RIGHT_MEASURE", "OOG_LEFT", "OOG_LEFT_MEASURE", "OOG_TOP", "OOG_TOP_MEASURE"
             ]]
 
     def get_df_containers_final(self, df_all_containers:pd.DataFrame, containers_final_dict:dict, d_iso_codes_map:dict, df_uslax:pd.DataFrame, df_revenues:pd.DataFrame, df_rotations:pd.DataFrame, df_stacks:pd.DataFrame, df_dg_loadlist:pd.DataFrame, df_dg_exclusions:pd.DataFrame):

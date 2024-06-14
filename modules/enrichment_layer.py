@@ -48,9 +48,14 @@ class EnrichmentLayer():
         -------
         None
         """
-
-        for i in range(len(this_header_csv_cols_list)):
-            self.dict_of_cols_values[this_header_csv_cols_list[i]].append(vars_list[i])
+        try:
+            for i in range(len(this_header_csv_cols_list)):
+                self.dict_of_cols_values[this_header_csv_cols_list[i]].append(vars_list[i])
+        except IndexError:
+            self.__logger.warning("Index error, probably due to difference in length between header columns and variables list.")
+            self.__logger.warning(f"header: {', '.join(this_header_csv_cols_list)}")
+            self.__logger.warning(f"vars: {', '.join(vars_list)}")
+            raise
 
     def __get_missing_csv_cols_in_container_data(self, present_csv_cols_list: list) -> list:
         """
