@@ -4,7 +4,6 @@ import re
 import logging
 import random
 import string
-import argparse
 
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
@@ -23,21 +22,6 @@ if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
 
 # DEFAULT_MISSING = {item for item in pd._libs.parsers.STR_NA_VALUES}
-
-
-# CLI Parser
-# Create an ArgumentParser
-parser = argparse.ArgumentParser(description="Simulation")
-# Add command-line arguments for logging configuration
-parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "OFF"],
-                     default="INFO", help="Logging level")
-
-parser.add_argument("--enable-logging", action="store_true", help="Enable logging")
-# Parse command-line arguments
-args = parser.parse_args()
-# Configure logging based on command-line arguments
-if args.enable_logging:
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class MainLayer():
     def __init__(

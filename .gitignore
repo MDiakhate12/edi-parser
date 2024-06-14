@@ -5,3 +5,9 @@ event_local.json
 event.json
 event_post_processing.json
 *.code-workspace
+
+# test files
+tests/mock/*/simulations/referential
+tests/mock/*/simulations/*/in_preprocessing
+tests/mock/*/simulations/*/intermediate
+tests/mock/*/simulations/*/out

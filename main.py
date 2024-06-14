@@ -4,6 +4,7 @@ import os
 import sys
 import traceback
 from boto3 import resource
+import argparse
 
 sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 
@@ -191,10 +192,13 @@ def lambda_handler(event, context):
         status_code = handle_error(e, event, bucket_data_name, table_dynamoDB, reuse_previous_results, list_handler)
         return {"statusCode": status_code}
 
-def main():
-    with open("./event_local.json", "r") as file:
-        event = json.load(file)
+def main(event: dict=None, **kwargs):
+    # configure logging
+    if kwargs.get("enable_logging"):
+        logging.basicConfig(level=kwargs.get("log_level"), format='%(asctime)s - %(levelname)s - %(message)s')
     logger, list_handler= configure_logger(event["simulation_id"])
+    
+    # launch main layer
     try:
         main_layer = MainLayer(logger, event, event.get("reusePreviousResults", False))
         main_layer.run_main()
@@ -204,4 +208,20 @@ def main():
         logger.error(e, exc_info=True)
 
 if __name__ == "__main__":
-    main()
+    # CLI Parser
+    # Create an ArgumentParser
+    parser = argparse.ArgumentParser(description="Simulation")
+    # Add command-line arguments for logging configuration
+    parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "OFF"],
+                        default="DEBUG", help="Logging level")
+
+    parser.add_argument("--enable-logging", action="store_true", help="Enable logging")
+    # Parse command-line arguments
+    args = parser.parse_args()
+    # Configure logging based on command-line arguments
+
+    # get event from local file
+    with open("./event_local.json", "r") as file:
+        event = json.load(file)
+
+    main(event, enable_logging=args.enable_logging, log_level=args.log_level)
