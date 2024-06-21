@@ -1,10 +1,14 @@
 import pandas as pd
 import numpy as np
 import re as re
+import logging
+from typing import Tuple
 from modules import common_helpers
+from anomaly_detection_layer import AnomalyDetectionLayer
 
 class PreProcessingLayer():
-    def __init__(self) -> None:
+    def __init__(self, AL: AnomalyDetectionLayer) -> None:
+        self.AL = AL
         #TODO hardcoded vars
         self.__port_num = 0
         self.__MAX_NB_FOR_POD_IN_SUBBAY = 3 # maximal number of containers for the POD to be considered in the subbay
@@ -172,9 +176,11 @@ class PreProcessingLayer():
             l_sizes.append(size_val)
             l_heights.append(height_val)
 
-        setting_col_idx = df.columns.get_loc("Setting")
-        df.insert(setting_col_idx+1, "Size", l_sizes)
-        df.insert(setting_col_idx+2, "Height", l_heights)
+        # setting_col_idx = df.columns.get_loc("Setting")
+        # df.insert(setting_col_idx+1, "Size", l_sizes)
+        # df.insert(setting_col_idx+2, "Height", l_heights)
+        df["Size"] = l_sizes
+        df["Height"] = l_heights
         
         return df
 
@@ -2166,6 +2172,12 @@ class PreProcessingLayer():
         return df
 
     def __add_pol_pod_nb(self, df:pd.DataFrame, df_rotation: pd.DataFrame) -> pd.DataFrame:
+        """
+        Computes a linearized version of the sequence number found in the input rotation.csv file
+        In the rotation.csv, the sequence number only indicates the order of the next ports. 
+        We need to be able to identify the ports of already loaded/discharged containers (negative POL_nb or POD_nb),
+        and differentiate them from containers that will be loaded/discharged in future stops (positive POL_nb or POD_nb).
+        """
         
         df_rotation = df_rotation[["ShortName", "Sequence"]]
 
@@ -2345,7 +2357,7 @@ class PreProcessingLayer():
         df_dg["cDG"] = [ get_dg_class(row) for (_, row) in df_dg.iterrows()]
         reg_sw_1 = re.compile(r"SW1,?")
         reg_sw_2 = re.compile("SW1$")
-        reg_sw_3 = re.compile("SW1\ ")
+        reg_sw_3 = re.compile(r"SW1\ ")
         def match_sw1(s): return reg_sw_1.match(s) or reg_sw_2.match(s) or reg_sw_3.match(s)
         
         def match_sw1_cols(r): return bool(any([match_sw1(str(r[col])) for col in dg_free_txt_cols]))
@@ -2385,6 +2397,186 @@ class PreProcessingLayer():
         df = pd.merge(df, df_exclusion, how='left', left_on=["Container", "LoadPort"], right_on=["ContId", "LoadPort"])
 
         return df    
+
+    def __handle_dg_load_in_china(self, df: pd.DataFrame) -> pd.DataFrame:
+        # check if there are dangerous equipments loaded in China for which Stowage column is set to DECK
+        self.AL.check_dg_loaded_in_china(df)
+       
+        # set the stowage column to HOLD following the mentioned conditions
+        df.loc[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")), "Stowage"] = "HOLD"
+        return df
+    
+    @staticmethod
+    def __update_oog_top_measure_for_one_slot_flat_racks(df: pd.DataFrame) -> pd.Series:
+        equipment_type_ranges = dict(std=[2.59, 2.74], hc=[2.89, 4.])
+        df["equipment_height_type"] = df["Height"].fillna(0.).apply(lambda height: "" if height == 0. else [k for k, v in equipment_type_ranges.items() if (min(v) <= height <= max(v))][0])
+        df["equipment_height_type_max"] = df["equipment_height_type"].apply(lambda x: equipment_type_ranges.get(x, [np.nan]*2)[1])
+        df["OOG_TOP_MEASURE"] = df["equipment_height_type_max"] - df["Height"]
+        return df["OOG_TOP_MEASURE"]
+    
+    # TODO: to be done using data models
+    @staticmethod
+    def __update_output_cols_types(df: pd.DataFrame) -> pd.DataFrame:
+        df = df.replace(r'^\s*$', np.nan, regex=True)
+        return df.astype(
+            dict(
+                Container=str,
+                Slot=str,
+                POD_nb=int,
+                POL_nb=int,
+                Size=int,
+                Weight=float,
+                Height=float,
+                OOG_FORWARD=int,
+                OOG_AFTWARDS=int,
+                OOG_RIGHT=int,
+                OOG_RIGHT_MEASURE=float,
+                OOG_LEFT=int,
+                OOG_LEFT_MEASURE=float,
+                OOG_TOP=int,
+                OOG_TOP_MEASURE=float,
+                cType=str,
+                Empty=str,
+                Revenue=float,
+                Type=str,
+                Stowage=str,
+                DGheated=bool,
+                Exclusion=float,
+                cDG=str
+            )
+        )
+    
+    def __handle_flat_racks(self, df: pd.DataFrame, logger: logging.Logger) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        This function allows to aggregate the characteristics for onboard containers that share a slot.
+        This is done in 2 phases:
+        - first, we group all the containers present on the slot, and aggregate all their physical characteristics using predefined rules. 
+            * group's POL: the POL of the first loaded container 
+            * group's POD: the POD of the first container to be discharged (which is the next POD)
+        - second, we group the containers present on the slot depending on their destination, in order to have one additional group per destination port
+            * group's POL: the POD of the last discharged group from the same slot
+            * group's POD: the POD of the whole group
+        The second grouping will induce a group for containers to be discharged in the next port, which can be considered a a duplicate of the first group. 
+        This group will then be removed before adding the new containers to the initial data
+
+        Parameters
+            df: pandas DataFrame
+        Returns
+            df: pandas DataFrame containing the containers information
+            container_group_mapping: pandas DataFrame containing the mapping between containers on shared slot and their associated group ID
+        """
+            
+        def agg_unique_value_column(Container: list, col: list, colname: str) -> str:
+            unique_stowage = list(set(col))
+            if len(unique_stowage) > 1:
+                raise ValueError(f"Unable to aggregate `{colname}` column for following containers found on same slot: {', '.join(list(set(Container)))}. {colname} found: {', '.join(unique_stowage)}")
+            else:
+                return unique_stowage[0]
+
+        # get onboard containers with defined slot
+        df_onboard = df[(df["POL_nb"] < 0) & (df["POD_nb"] > 0) & (df["Slot"] != "")]
+
+        # get containers with shared slots
+        df_flat_racks = df_onboard[df_onboard.duplicated(subset='Slot', keep=False)]
+        dup_slots = df_flat_racks["Slot"].unique().tolist()
+
+        # initialize container group mapping dataframe
+        container_group_mapping = pd.DataFrame(columns=["Container_group", "Container", "Slot", "POL_nb", "LoadPort", "POD_nb", "DischPort"])
+
+        if len(dup_slots) > 0:
+            logger.info(f"Found multiple containers on following slot(s): {', '.join(dup_slots)}. Performing slot-based aggregations.")
+            # remove lines with duplicated slots from initial data
+            df = df[~df["Slot"].isin(dup_slots)]
+
+            # get ports <-> ports number mapping
+            load_ports = (df_flat_racks["POL_nb"].astype(str) + "_" + df_flat_racks["LoadPort"])
+            disch_ports = (df_flat_racks["POD_nb"].astype(str) + "_" + df_flat_racks["DischPort"])
+            ports = list(pd.concat([load_ports, disch_ports], axis=0).unique())
+            ports_mapping = {k: v for port in ports for k, v in [port.split("_")]}
+
+            # group by slot, and then by slot and POD. The result of each grouping will be concatenated to the initial data
+            df_flat_racks = self.__update_output_cols_types(df_flat_racks)
+            grouping_attributes = [["Slot"], ["Slot", "POD_nb"]]
+            aggregation_map = dict(
+                Container=list,
+                POD_nb=min,
+                POL_nb=min,
+                Size=max,
+                Weight=sum,
+                Height=max,
+                OOG_FORWARD=max,
+                OOG_AFTWARDS=max,
+                OOG_RIGHT=max,
+                OOG_RIGHT_MEASURE=max,
+                OOG_LEFT=max,
+                OOG_LEFT_MEASURE=max,
+                OOG_TOP=max,
+                OOG_TOP_MEASURE=max,
+                cType=(lambda cType: "RE" if (cType == "RE").any() else "GP"),
+                Empty=(lambda Empty: "E" if (Empty == "E").all() else ""),
+                Revenue=sum,
+                Type=max,
+                Stowage=list,
+                DGheated=(lambda DGheated: DGheated.sum() >= 1),
+                Exclusion=(lambda Exclusion: Exclusion.sum()),
+                cDG=list
+            )
+            df_groups_list = list()
+            for ga in grouping_attributes:
+                aggregation_map_ajusted = {k: v for k, v in aggregation_map.items() if k not in ga}
+                df_groups = df_flat_racks \
+                    .groupby(ga) \
+                    .agg(aggregation_map_ajusted) \
+                    .reset_index()
+                
+                # add more aggregated columns
+                df_groups["grouping_cols"] = ", ".join(ga)
+                df_groups["Container_group"] = "DP" + df_groups['Slot'].astype(str) + df_groups['POD_nb'].astype(str)
+                df_groups["Setting"] = np.where(df_groups["cType"] == "RE", "R", df_groups["Empty"])
+                df_groups["cWeight"] = np.where(df_groups["Weight"] <= 8, "L", "H")
+                df_groups["Stowage"] = df_groups.apply(lambda x: agg_unique_value_column(x["Container"], x["Stowage"], colname="Stowage"), axis=1)
+                df_groups["cDG"] = df_groups.apply(lambda x: agg_unique_value_column(x["Container"], x["cDG"], colname="cDG"), axis=1)
+                df_groups["OOG_TOP_MEASURE"] = self.__update_oog_top_measure_for_one_slot_flat_racks(df_groups)
+
+                # append all generated aggregated data
+                df_groups_list.append(df_groups)
+
+            # concatenate all generated aggregated data
+            df_groups_final = pd.concat(df_groups_list, axis=0)
+            
+            # remove group corresponding only to first containers to be discharged
+            # That is, with duplicated (Container_group, Slot, POD_nb and POL_nb) when one of the duplicates comes from grouping per Slot and POD_nb
+            df_groups_final = df_groups_final[
+                ~(
+                    df_groups_final.duplicated(subset=["Container_group", "Slot", "POL_nb", "POD_nb"])
+                    & (df_groups_final["grouping_cols"] == "Slot, POD_nb")
+                )
+            ]
+
+            # get intermediate groups' POL_nb, as the POD of the last group from the same slot
+            df_groups_final.sort_values(["Slot", "POD_nb"], inplace=True)
+            df_pod_nb_previous = df_groups_final[["POD_nb"]].shift(1).rename(columns=dict(POD_nb="prev_POD_nb"))
+            df_groups_final = pd.concat([df_groups_final, df_pod_nb_previous], axis=1)
+            df_groups_final["POL_nb"] = pd.Series(np.where(df_groups_final["prev_POD_nb"].isna(), df_groups_final["POL_nb"], df_groups_final["prev_POD_nb"])).astype(int)
+            df_groups_final.drop(columns="prev_POD_nb", inplace=True)
+
+            # add POL and POD names according to mapping
+            df_groups_final["LoadPort"] = df_groups_final["POL_nb"].astype(str).map(ports_mapping)
+            df_groups_final["DischPort"] = df_groups_final["POD_nb"].astype(str).map(ports_mapping)
+
+            # get container <-> group mapping
+            container_group_mapping = df_flat_racks[["Container", "Slot", "POL_nb", "LoadPort", "POD_nb", "DischPort", "Weight"]]
+            container_group_mapping = container_group_mapping.merge(df_groups_final[["Container_group", "Container"]].explode("Container"), how="left", on="Container")
+            
+            # remove helper columns
+            df_groups_final = df_groups_final \
+                .drop(columns=["Container", "grouping_cols"]) \
+                .rename(columns=dict(Container_group="Container"))
+            
+            # concatenate with initial dataframe
+            df = pd.concat([df, df_groups_final], axis=0)
+        
+        return df, container_group_mapping
     
     def __arrange_columns(self, df:pd.DataFrame)->pd.DataFrame:
         return df[[
@@ -2397,12 +2589,23 @@ class PreProcessingLayer():
             "Subport", "Stowage", "DGheated", "Exclusion",
             "OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_RIGHT_MEASURE", "OOG_LEFT", "OOG_LEFT_MEASURE", "OOG_TOP", "OOG_TOP_MEASURE"
             ]]
-
-    def get_df_containers_final(self, df_all_containers:pd.DataFrame, containers_final_dict:dict, d_iso_codes_map:dict, df_uslax:pd.DataFrame, df_revenues:pd.DataFrame, df_rotations:pd.DataFrame, df_stacks:pd.DataFrame, df_dg_loadlist:pd.DataFrame, df_dg_exclusions:pd.DataFrame):
+        
+    def get_df_containers_final(
+            self,
+            df_all_containers:pd.DataFrame, 
+            containers_final_dict:dict, 
+            d_iso_codes_map:dict, 
+            df_uslax:pd.DataFrame, 
+            df_revenues:pd.DataFrame, 
+            df_rotations:pd.DataFrame, 
+            df_stacks:pd.DataFrame, 
+            df_dg_loadlist:pd.DataFrame, 
+            df_dg_exclusions:pd.DataFrame, 
+            logger: logging.Logger=None
+        ):
         df_copy = df_all_containers.copy()
 
         df_combined_containers_filtered = self.__extract_columns_combined_containers(df_copy, containers_final_dict)
-        df_combined_containers_filtered = self.__add_characteristics(df_combined_containers_filtered)
         df_combined_containers_filtered = self.__add_sizes_and_heights_to_df(df_combined_containers_filtered, d_iso_codes_map)
         df_combined_containers_filtered = self.__add_weights(df_combined_containers_filtered)
         df_combined_containers_filtered = self.__add_oog_combined_containers(df_combined_containers_filtered)
@@ -2410,12 +2613,15 @@ class PreProcessingLayer():
         df_combined_containers_filtered = self.__add_dg_class(df_combined_containers_filtered, df_all_containers, df_dg_loadlist)
         df_combined_containers_filtered = self.__add_dg_exclusion(df_combined_containers_filtered, df_dg_exclusions, df_stacks)
         df_combined_containers_filtered = self.__add_slot_position(df_combined_containers_filtered)
-        df_combined_containers_filtered = self.__add_uslax_priorities(df_combined_containers_filtered, df_uslax)
-        df_combined_containers_filtered = self.__add_revenues(df_combined_containers_filtered, df_revenues)
         df_combined_containers_filtered = self.__add_pol_pod_nb(df_combined_containers_filtered, df_rotations)
+        df_combined_containers_filtered = self.__add_characteristics(df_combined_containers_filtered)
+        df_combined_containers_filtered = self.__add_revenues(df_combined_containers_filtered, df_revenues)
+        df_combined_containers_filtered, container_groups_mapping = self.__handle_flat_racks(df_combined_containers_filtered, logger)
+        df_combined_containers_filtered = self.__add_uslax_priorities(df_combined_containers_filtered, df_uslax)
         df_combined_containers_filtered = self.__add_overstows(df_combined_containers_filtered, df_stacks)
         df_combined_containers_filtered = self.__add_overstows_20_isolated(df_combined_containers_filtered, df_stacks, df_rotations)
         df_combined_containers_filtered = self.__add_non_reefer_at_reefer_slot(df_combined_containers_filtered, df_stacks)
+        df_combined_containers_filtered = self.__handle_dg_load_in_china(df_combined_containers_filtered)
         df_combined_containers_final = self.__arrange_columns(df_combined_containers_filtered)
 
-        return df_combined_containers_final
+        return df_combined_containers_final, container_groups_mapping

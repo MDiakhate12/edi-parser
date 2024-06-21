@@ -82,7 +82,7 @@ class MainLayer():
         self.__ML = ML(self.__d_seq_num_to_port_name, self.__d_port_name_to_seq_num)
 
         # initialize processing layer
-        self.__PL = PL()
+        self.__PL = PL(self.__AL)
 
     def __setup_in_preprocessing_layer(self) -> None:
             self.logger.info("*"*80)
@@ -422,7 +422,8 @@ class MainLayer():
             return None, None, None
         
         if file_type in ['OnBoard', 'LoadList']:
-            self.__AL.check_missing_new_container_header(l_baplie_segments, call_id, file_type)
+            # raise a warning if multi-equipment slots encountered, and generate a new segments' list
+            l_baplie_segments = self.__AL.check_missing_new_container_header(l_baplie_segments, call_id, file_type, logger=self.logger)
             
         new_data_flag_in_baplie = new_data_flag.replace("_", "+")
         self.logger.info(f"New data for a {baplie_type_from_file_name} starts at: {new_data_flag_in_baplie}...")
@@ -890,7 +891,7 @@ class MainLayer():
                     
                 self.__AL.check_if_errors()
             else:
-                self.logger.info("LoadList.edi exists for all port calls in sumulation folder...")
+                self.logger.info("LoadList.edi exists for all port calls in simulation folder...")
             self.logger.info("*" * 80)
         else:
             self.logger.info(f"Service line {self.__service_code} not found in EDI referentials...")
@@ -1167,16 +1168,18 @@ class MainLayer():
         df_stacks = self.__DL.read_csv(stacks_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
 
         df_final_containers_csv_name = "containers.csv"
-        df_final_containers = self.__PL.get_df_containers_final(df_all_containers, df_containers_config, d_iso_codes_map, df_uslax, df_POL_POD_revenues, df_rotation_final, df_stacks, df_DG_loadlist, df_loadlist_exclusions)
+        df_container_groups_mapping_csv_name = "equipment_mapping.csv"
+        df_final_containers, df_container_groups_mapping = self.__PL.get_df_containers_final(df_all_containers, df_containers_config, d_iso_codes_map, df_uslax, df_POL_POD_revenues, df_rotation_final, df_stacks, df_DG_loadlist, df_loadlist_exclusions, self.logger)
         df_final_containers_csv_path = f"{self.__py_scripts_out_dir}/{df_final_containers_csv_name}"
+        df_container_groups_mapping_csv_path = f"{self.__py_scripts_out_dir}/{df_container_groups_mapping_csv_name}"
         self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
+        self.__DL.write_csv(df_container_groups_mapping, df_container_groups_mapping_csv_path, s3_bucket=self.__s3_bucket_out)
 
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")
         self.logger.info("*"*80)
 
-    def __get_CPLEX_output(self) -> 'tuple[pd.DataFrame, dict, dict]':
-        df_cplex_out = self.__DL.read_csv(f"{self.__cplex_out_dir}/output.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+    def __get_CPLEX_output(self, df_cplex_out:pd.DataFrame) -> 'tuple[pd.DataFrame, dict, dict]':
         df_cplex_out = self.__PL.process_slots(df_cplex_out, "SLOT_POSITION", True)
         l_cplex_containers_ids = df_cplex_out["REAL_CONTAINER_ID"].tolist()
         l_cplex_slots = []
@@ -1397,12 +1400,35 @@ class MainLayer():
         path_to_save = f"{self.__cplex_out_dir}/Bayplan.edi"
         self.__DL.output_bayplan_edi(path_to_save, baplie_delimiter, l_all_semgents, self.__s3_bucket_out)
 
+    def _handle_flat_racks_in_output(self) -> pd.DataFrame:
+        # get output data
+        df_cplex_out = self.__DL.read_csv(f"{self.__cplex_out_dir}/output.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+        
+        # check if there are container groups in the output
+        groups = df_cplex_out[df_cplex_out["REAL_CONTAINER_ID"].str.startswith("DP")]
+        if groups.shape[0] > 0:
+            equipment_mapping = self.__DL.read_csv(f"{self.__py_scripts_out_dir}/equipment_mapping.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
+            df_cplex_out = df_cplex_out \
+                .merge(equipment_mapping, how="left", left_on="REAL_CONTAINER_ID", right_on="Container_group")
+            # update Container ID, POL and POD
+            df_cplex_out["REAL_CONTAINER_ID"] = np.where(df_cplex_out["Container"].isna(), df_cplex_out["REAL_CONTAINER_ID"], df_cplex_out["Container"])
+            df_cplex_out["POL"] = np.where(df_cplex_out["LoadPort"].isna(), df_cplex_out["POL"], df_cplex_out["LoadPort"])
+            df_cplex_out["POD"] = np.where(df_cplex_out["DischPort"].isna(), df_cplex_out["POD"], df_cplex_out["DischPort"])
+            df_cplex_out["WEIGHT_KG"] = np.where(df_cplex_out["Weight"].isna(), df_cplex_out["WEIGHT_KG"], df_cplex_out["Weight"])
+            # drop duplicates if applicable
+            df_cplex_out = df_cplex_out[["REAL_CONTAINER_ID", "TEST_CONTAINER_ID", "POL", "POD", "ISO_CODE", "WEIGHT_KG", "SETTING", "SLOT_POSITION", "CARRIER"]]
+            df_cplex_out.drop_duplicates(subset="REAL_CONTAINER_ID", inplace=True)
+            df_cplex_out.reset_index(drop=True)
+            df_cplex_out["TEST_CONTAINER_ID"] = "C" + df_cplex_out.index.astype(str)
+        return df_cplex_out
+    
     def __run_reexecution(self) -> None:
         
         files_in_output = self.__DL.list_files_in_path(self.__cplex_out_dir, self.__s3_bucket_out)
         self.__AL.check_if_no_output_postprocess(files_in_output)
         
-        df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output()
+        df_cplex_out = self._handle_flat_racks_in_output()
+        df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output(df_cplex_out)
             
         df_all_containers, df_filled_slots = self.__update_csvs_with_CPLEX_output(d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys)
             # df_DG_classes_expanded = self.__get_df_DG_classes_expanded()
