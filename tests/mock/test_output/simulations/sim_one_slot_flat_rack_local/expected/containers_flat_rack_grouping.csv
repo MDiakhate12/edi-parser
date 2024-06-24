@@ -1,3 +1,0 @@
-Container,LoadPort,POL_nb,DischPort,POD_nb,Size,cType,cWeight,Height,cDG,Empty,Revenue,Type,Setting,Weight,Slot,priorityID,priorityLevel,overstowPort,NonReeferAtReefer,Subport,Stowage,DGheated,Exclusion,OOG_FORWARD,OOG_AFTWARDS,OOG_RIGHT,OOG_RIGHT_MEASURE,OOG_LEFT,OOG_LEFT_MEASURE,OOG_TOP,OOG_TOP_MEASURE
-DP8617781,SAJED,-12,MYPKG,1,40,GP,H,,,E,20000.0,4260,E,10.97,861778,-1,-1,,,,,0,0.0,0,0,0,0.0,0,0.0,0,
-DP8617782,MYPKG,1,CNSHA,2,40,GP,L,,,E,10000.0,4260,E,5.485,861778,-1,-1,,,,,0,0.0,0,0,0,0.0,0,0.0,0,
