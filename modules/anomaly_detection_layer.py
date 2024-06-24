@@ -4,6 +4,7 @@ import string
 import json
 from datetime import datetime
 from modules import common_helpers
+import logging
 
 class AnomalyDetectionLayer():
     def __init__(self, DL:object) -> None:
@@ -124,17 +125,33 @@ class AnomalyDetectionLayer():
         
         
     #In case of multiple EQD in one LOC is found 
-    def check_missing_new_container_header(self, list_of_lists:list, folder_name: str, file_type:str) -> None:
-        
-        for sublist in list_of_lists:
-            eqd_indices = [i for i, item in enumerate(sublist) if item.startswith("EQD")]
+    def check_missing_new_container_header(self, l_baplie_segments: list, folder_name: str, file_type:str, logger: logging.Logger) -> None:
+        l_baplie_segments_updated = []
+
+        for segment in l_baplie_segments:
+            eqd_indices = [i for i, item in enumerate(segment) if item.startswith("EQD")]
             
             if len(eqd_indices) > 1:
-                criticity = "Error"
-                sublist_invalid_ids = [sublist[idx].split("+")[2].split(":")[0] for idx in eqd_indices]
-                message = f"Containers {sublist_invalid_ids} are under the same new container identifier."
+                # raise a warning
+                criticity = "Warning"
+                segment_invalid_ids = [segment[idx].split("+")[2].split(":")[0] for idx in eqd_indices]
+                message = f"Containers {segment_invalid_ids} are under the same new container identifier."
                 error_value = "TBD"
                 self.__add_single_anomaly(criticity, message, error_value, folder_name, file_type)
+
+                # create a new segment for each EQD in the current segment, adding the slot location to the EQD information
+                eqd_indices.sort()
+                for i, _ in enumerate(eqd_indices):
+                    try:
+                        logger.debug("added segment to list: ", [segment[0]] + segment[eqd_indices[i]:eqd_indices[i+1]])
+                        l_baplie_segments_updated.append([segment[0]] + segment[eqd_indices[i]:eqd_indices[i+1]])
+                    except IndexError:
+                        logger.debug("added segment to list: ", [segment[0]] + segment[eqd_indices[i]:])
+                        l_baplie_segments_updated.append([segment[0]] + segment[eqd_indices[i]:])
+            else:
+                # add initial segment into new segments list
+                l_baplie_segments_updated.append(segment)
+        return l_baplie_segments_updated
 
     def check_extracted_containers_num(self, containers_in_baplie_num: int, containers_extracted_num: int, call_id: str, file_type: str) -> None:
         containers_num_diff = containers_in_baplie_num - containers_extracted_num
@@ -600,8 +617,7 @@ class AnomalyDetectionLayer():
         dups_count = pds_dups_bool_mask.sum()
         
         if dups_count:
-            criticity = "Error" 
-            # criticity = "Warning"
+            criticity = "Warning"
             message = self.__get_full_msg("with the same slot positions")
             error_value = "TBD"
 
@@ -895,6 +911,15 @@ class AnomalyDetectionLayer():
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, file_type='output.csv')
             self.check_if_errors()
+
+    def check_dg_loaded_in_china(self, df: pd.DataFrame) -> None:
+        df_filtered = df[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")) & (df["Stowage"] == "DECK")]
+        if df_filtered.shape[0] > 0:
+            dg_containers = df_filtered[["Container"]].values.flatten()
+            criticity = "Warning"
+            message = self.__get_full_msg(f"Some dangerous containers loaded in China were stowed on DECK: {', '.join(dg_containers)}. Changing Stowage column to HOLD.")
+            error_value = "TBD"
+            self.__add_single_anomaly(criticity, message, error_value, file_type="containers.csv")
             
     def validate_data(self, data_dict: dict) -> None:
         """
