@@ -4,10 +4,9 @@ import re as re
 import logging
 from typing import Tuple
 from modules import common_helpers
-from anomaly_detection_layer import AnomalyDetectionLayer
 
 class PreProcessingLayer():
-    def __init__(self, AL: AnomalyDetectionLayer) -> None:
+    def __init__(self, AL: object) -> None:
         self.AL = AL
         #TODO hardcoded vars
         self.__port_num = 0
@@ -2023,11 +2022,12 @@ class PreProcessingLayer():
             "EQD_DIM_7_WIDTH_MEASURE", "EQD_DIM_8_WIDTH_MEASURE", "EQD_DIM_13_HEIGHT_MEASURE"
         ]
         
-        
+        # filter colums
         oog_dynamic_cols_present = [col for col in oog_dynamic_cols if col in df_all_containers.columns]
-        
         handling_cols = [col for col in df_all_containers.columns if "HANDLING" in col or "HAN" in col]
-        
+        missing_static_columns = [col for col in static_columns if col not in df_all_containers.columns]
+        if missing_static_columns:
+            df_all_containers = df_all_containers.reindex(columns = df_all_containers.columns.tolist() + missing_static_columns)
         columns_selected = static_columns + oog_dynamic_cols_present + handling_cols
         
         df_combined_containers_filtered = df_all_containers[columns_selected]

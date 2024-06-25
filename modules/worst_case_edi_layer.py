@@ -4,7 +4,6 @@ import logging
 
 from modules.common_helpers import split_list 
 from modules.data_layer import DataLayer as DL
-from modules.anomaly_detection_layer import AnomalyDetectionLayer
 
 
 class worst_case_baplies():
