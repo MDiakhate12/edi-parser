@@ -1,7 +1,6 @@
 import pandas as pd
 import random
 import string
-import json
 from datetime import datetime
 from modules import common_helpers
 import logging
@@ -852,7 +851,7 @@ class AnomalyDetectionLayer():
         criticity = "Warning"
         error_value = "TBD"
         message = self.__get_full_msg(f"Distance to next port from {port_name} is 0. Default FuelCost and min/max speed will then be set to 0.")
-        self.__add_single_anomaly(criticity, message, error_value, container_id=container_id)
+        self.__add_single_anomaly(criticity, message, error_value)
 
 
     def check_missing_ports(self, rotation_intermediate, cranes_csv) -> None:
