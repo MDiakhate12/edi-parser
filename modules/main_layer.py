@@ -1067,11 +1067,13 @@ class MainLayer():
         self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         fuel_data_dict = fuel_costs_df.set_index('FUEL_TYPE')['COST_USD'].to_dict()
-        asian_countries = self.__DL.read_csv(f"{self.__static_in_dir}/asian_countries.csv",  sep=",", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         self.logger.info("Generating final rotation.csv...")
         
-        rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, l_containers_folder_names, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict, l_POD_profile)
-        df_rotation_final = rotations.get_rotations_final(asian_countries)
+        rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, l_containers_folder_names, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict)
+        df_rotation_final = rotations.get_rotations_final()
+        last_index_in_rotations = df_rotation_final[df_rotation_final['ShortName'].isin(l_POD_profile)].index.max()
+        df_rotation_final = df_rotation_final.iloc[:(last_index_in_rotations + 1)]
+        df_rotation_final["ShortName"] = df_rotation_final["ShortName"].apply(lambda x: x[:5])
         rotation_csv_name = "rotation.csv"
         rotation_csv_path = f"{self.__py_scripts_out_dir}/{rotation_csv_name}"
         self.__DL.write_csv(df_rotation_final, rotation_csv_path, s3_bucket=self.__s3_bucket_out)
@@ -1398,7 +1400,7 @@ class MainLayer():
         path_to_save = f"{self.__cplex_out_dir}/Bayplan.edi"
         self.__DL.output_bayplan_edi(path_to_save, baplie_delimiter, l_all_semgents, self.__s3_bucket_out)
 
-    def _handle_one_slot_flat_racks_in_output(self) -> pd.DataFrame:
+    def _handle_flat_racks_in_output(self) -> pd.DataFrame:
         # get output data
         df_cplex_out = self.__DL.read_csv(f"{self.__cplex_out_dir}/output.csv", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_out)
         
@@ -1425,7 +1427,7 @@ class MainLayer():
         files_in_output = self.__DL.list_files_in_path(self.__cplex_out_dir, self.__s3_bucket_out)
         self.__AL.check_if_no_output_postprocess(files_in_output)
         
-        df_cplex_out = self._handle_one_slot_flat_racks_in_output()
+        df_cplex_out = self._handle_flat_racks_in_output()
         df_cplex_out, d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys = self.__get_CPLEX_output(df_cplex_out)
             
         df_all_containers, df_filled_slots = self.__update_csvs_with_CPLEX_output(d_cplex_containers_slot_by_id, d_cplex_containers_slot_by_id_keys)
