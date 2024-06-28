@@ -5,18 +5,16 @@ import pandas as pd
 from pandas.testing import assert_frame_equal
 from main import main
 from tests.utils import get_referential_files_from_s3
-from tests.test_ouputs.common import CommonTests
 pd.set_option('display.max_columns', None)
 
 
-class TestOutputBasicSimulation(CommonTests):
+class TestOutputBasicSimulation:
 
     # initialize mock data
     MOCK_DATA_PATH = f"{os.path.dirname(os.path.dirname(__file__))}/mock/test_output"
     MOCK_SIMULATION_ID = "basic"
     SIMULATION_FOLDER_PATH = f"{MOCK_DATA_PATH}/simulations/sim_{MOCK_SIMULATION_ID}_local"
-    INTERMEDIATE_PATH = f"{SIMULATION_FOLDER_PATH}/intermediate"
-    OUTPUT_PATH = f"{SIMULATION_FOLDER_PATH}/out"
+    OUTPUT_PATH = f"{SIMULATION_FOLDER_PATH}/intermediate"
     EXPECTED_TEST_RESULTS_FOLDER_PATH = f"{SIMULATION_FOLDER_PATH}/expected"
     EVENT = dict(
         vesselImo = "9454450",
@@ -31,6 +29,33 @@ class TestOutputBasicSimulation(CommonTests):
     # initialize referential data
     if not os.path.exists(f"{MOCK_DATA_PATH}/referential"):
         get_referential_files_from_s3(local_simulation_folder=MOCK_DATA_PATH, environment="prd")
+    
+     # get the containers.csv file if it does not exist
+    if not os.path.exists(f"{OUTPUT_PATH}/containers.csv"):
+        main(EVENT, enable_logging=True, log_level="DEBUG")
+
+    @pytest.fixture(scope="class")
+    def containers_csv(self) -> pd.DataFrame:
+        try:
+            if not os.path.exists(f"{self.OUTPUT_PATH}/containers.csv"):
+                main(self.EVENT, enable_logging=True, log_level="DEBUG")
+        except:
+            raise
+        else:
+            return pd.read_csv(f"{self.OUTPUT_PATH}/containers.csv", sep=";")
+
+    def test_containers_csv_final_columns(self, containers_csv: pd.DataFrame):
+        expected_columns = ['Container', 'DGheated', 'DischPort', 'Empty', 'Exclusion', 'Height', 'LoadPort', 'NonReeferAtReefer', 'OOG_AFTWARDS', 'OOG_FORWARD', 'OOG_LEFT', 'OOG_LEFT_MEASURE', 'OOG_RIGHT', 'OOG_RIGHT_MEASURE', 'OOG_TOP', 'OOG_TOP_MEASURE', 'POD_nb', 'POL_nb', 'Revenue', 'Setting', 'Size', 'Slot', 'Stowage', 'Subport', 'Type', 'Weight', 'cDG', 'cType', 'cWeight', 'overstowPort', 'priorityID', 'priorityLevel']
+        actual_columns = list(containers_csv.columns)
+        expected_columns.sort()
+        actual_columns.sort()
+        try:
+            print(self.MOCK_DATA_PATH)
+            assert expected_columns == actual_columns
+        except AssertionError:
+            print(expected_columns)
+            print(actual_columns)
+            raise
 
     def test_containers_csv_oog_dimensions(self, containers_csv: pd.DataFrame):
         # expected containers with OOG

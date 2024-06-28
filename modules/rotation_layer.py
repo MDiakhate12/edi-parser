@@ -6,7 +6,7 @@ import datetime
 
 class rotation():
 
-    def __init__(self, logger: logging.Logger, vessel: object, rotation_intermediate: pd.DataFrame, l_dfs_containers_POL_POD: pd.DataFrame, l_containers_folder_names:list, d_seq_num_to_port_name: dict, rotation_csv_map: dict, df_shifting_rates:pd.DataFrame, consumption_df:pd.DataFrame, fuel_data_dict: dict, l_POD_profile: list) -> None:
+    def __init__(self, logger: logging.Logger, vessel: object, rotation_intermediate: pd.DataFrame, l_dfs_containers_POL_POD: pd.DataFrame, l_containers_folder_names:list, d_seq_num_to_port_name: dict, rotation_csv_map: dict, df_shifting_rates:pd.DataFrame, consumption_df:pd.DataFrame, fuel_data_dict: dict) -> None:
         self.logger = logger
         self.__vessel_id = vessel.get_imo()
         self.rotations_intermediate = rotation_intermediate
@@ -21,7 +21,6 @@ class rotation():
         self.ports_count = len(self.d_seq_num_to_port_name)
         self.__rotation_csv_map = rotation_csv_map
         self.l_ports_names = [self.d_seq_num_to_port_name[i] for i in range(self.ports_count)]
-        self.l_POD_profile =l_POD_profile
  
     def __increment_port_number(self, rotation_intermediate_df: pd.DataFrame)->None:
         port_counts = {}
@@ -316,22 +315,9 @@ class rotation():
             hourly_cost_rounded = round(hourly_cost, 2)
         except:
             hourly_cost_rounded = 0
-        d_rotation[port_name]["HourlyCost"] = hourly_cost_rounded
-
-    def __add_last_asian_port(self, df_rotations: pd.DataFrame, df_asian_countries: pd.DataFrame) -> pd.DataFrame:
-        df_rotations["LastAsianPort"] = ""
-        df_rotations["country_code"] = df_rotations["ShortName"].apply(lambda name: name[:2])
-        df_rotations = df_rotations.merge(df_asian_countries, how="left", left_on="country_code", right_on="COUNTRY").sort_values("Sequence")
-        try:
-            last_asian_port_idx = df_rotations[df_rotations["CONTINENT"] == "A"] \
-                .sort_values("Sequence") \
-                .tail(1)["ShortName"].index.values[0]
-            df_rotations.loc[last_asian_port_idx, "LastAsianPort"] = "X"
-        except IndexError as err:
-            self.logger.info("No Asian port found in rotation.csv")
-        return df_rotations.drop(columns=["country_code", "COUNTRY", "CONTINENT", "FULL_NAME"])
+        d_rotation[port_name]["HourlyCost"] = hourly_cost_rounded   
           
-    def get_rotations_final(self, df_asian_countries: pd.DataFrame) -> None:
+    def get_rotations_final(self) -> None:
         
         d_rotation = self.__process_df_intermediate_rotation()
         #temp solution until webapp has these 2 values 
@@ -373,7 +359,7 @@ class rotation():
                 
                 self.__add_RW_costs_to_d_rotation(d_rotation, port_name)
                 self.__add_hourly_cost_to_d_rotation(d_rotation, port_name)
-
+        
         # Add missing keys
         for port_data in d_rotation.values():
             port_data['EstimContWeight'] = ""
@@ -386,12 +372,4 @@ class rotation():
         # Create the DataFrame with the specified column order
         rotation_final_df = pd.DataFrame.from_dict(d_rotation, orient='index', columns=column_order)
         rotation_final_df.reset_index(drop=True, inplace=True)
-        
-        # update short name (?)
-        last_index_in_rotations = rotation_final_df[rotation_final_df['ShortName'].isin(self.l_POD_profile)].index.max()
-        rotation_final_df = rotation_final_df.iloc[:(last_index_in_rotations + 1)]
-        rotation_final_df["ShortName"] = rotation_final_df["ShortName"].apply(lambda x: x[:5])
-
-        # Add last asian port column
-        rotation_final_df = self.__add_last_asian_port(rotation_final_df, df_asian_countries)
         return rotation_final_df
