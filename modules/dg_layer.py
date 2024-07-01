@@ -495,7 +495,7 @@ class DG:
         df_not_matched_second_merge.reset_index(drop=True, inplace=True)
 
         # Concatenate both dataframes
-        df_DG_loadlist_final = pd.concat([df_matched_second_merge, df_matched_second_merge], ignore_index=True)
+        df_DG_loadlist_final = pd.concat([df_matched_second_merge, df_not_matched_second_merge], ignore_index=True)
 
         # # Reset index for the final DataFrame
         df_DG_loadlist_final.reset_index(drop=True, inplace=True)
@@ -508,7 +508,7 @@ class DG:
         #Stowage Category order from most to least critical 
         sort_order= ["1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]
         # Group By Serial Number and order in decreasing criticality
-        df_copy1= df_copy1\
+        df_copy1 = df_copy1\
             .groupby(
                 ["Serial Number", "POL", "POD", "Class", "SubLabel1", "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight", "PGr", "UN"],
                 group_keys= False
