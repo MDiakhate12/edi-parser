@@ -247,7 +247,8 @@ class Lashing():
                 "E": 2.895,
                 "N": 2.895, 
                 "8": 1.295,
-                "9":1.219
+                "9":1.219,
+                "standard": 2.591
             }
         
         dimensions, not_found_dimensions = [], []
@@ -255,18 +256,22 @@ class Lashing():
         for code in codes:
             length_code = code[0]
             height_code = code[1]
+            
+            height = height_codes.get(height_code)
+            length = length_codes.get(length_code)
 
-            if length_code in length_codes and height_code in height_codes:
-                length = length_codes[length_code]
-                height = height_codes[height_code]
-                dimensions.append([length, height])
-            else:
-                not_found_dimensions.append(code)
+            if not length:
                 self._logger.error(f"could not match {code} container type to height or length....")
-            
-        if len(not_found_dimensions):
-            raise ValueError(f"Invalid length code or height code for old ISO format for the following: {not_found_dimensions}")
-            
+                not_found_dimensions.append(code)
+            elif not height:
+                height = height_codes["standard"] 
+                self._logger.warn(f"Height code not found in ISO code, setting to standard height 2.591")
+
+            dimensions.append([length, height])
+
+        if len(not_found_dimensions):        
+            raise ValueError(f"Invalid length code for old ISO format for the following: {not_found_dimensions}")
+                    
         return dimensions
 
     def __extract_max_min_diff(self, split_array:np.array)->np.array:
