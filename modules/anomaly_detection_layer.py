@@ -912,11 +912,11 @@ class AnomalyDetectionLayer():
             self.check_if_errors()
 
     def check_dg_loaded_in_china(self, df: pd.DataFrame) -> None:
-        df_filtered = df[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")) & (df["Stowage"] == "DECK")]
+        df_filtered = df[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")) & (df["Stowage"] == "HOLD")]
         if df_filtered.shape[0] > 0:
             dg_containers = df_filtered[["Container"]].values.flatten()
             criticity = "Warning"
-            message = self.__get_full_msg(f"Some dangerous containers loaded in China were stowed on DECK: {', '.join(dg_containers)}. Changing Stowage column to HOLD.")
+            message = self.__get_full_msg(f"Some dangerous containers loaded in China were stowed on HOLD: {', '.join(dg_containers)}. Changing Stowage column to DECK.")
             error_value = "TBD"
             self.__add_single_anomaly(criticity, message, error_value, file_type="containers.csv")
             

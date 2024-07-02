@@ -74,10 +74,10 @@ class TestOutputBasicSimulation:
         df_dg_loaded_in_china = containers_csv[(containers_csv["cDG"] != "") & (containers_csv["LoadPort"].str.startswith("CN"))]
         if df_dg_loaded_in_china.shape[0] > 0:
             try:
-                assert all([val == "HOLD" for val in df_dg_loaded_in_china[["Stowage"]].values.flatten()])
+                assert all([val == "DECK" for val in df_dg_loaded_in_china[["Stowage"]].values.flatten()])
             except AssertionError:
-                print(f"Some dangerous containers loaded in China are not stowed in HOLD.")
+                print(f"Some dangerous containers loaded in China are not stowed on DECK.")
                 print(df_dg_loaded_in_china[["Container", "LoadPort", "cDG", "Stowage"]])
                 raise
         else:
-            raise ValueError("Unable to check if dangerous containers loaded in China are stowed on HOLD.")
+            raise ValueError("Unable to check if dangerous containers loaded in China are stowed on DECK.")

@@ -2403,7 +2403,7 @@ class PreProcessingLayer():
         self.AL.check_dg_loaded_in_china(df)
        
         # set the stowage column to HOLD following the mentioned conditions
-        df.loc[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")), "Stowage"] = "HOLD"
+        df.loc[(df["cDG"] != "") & (df["LoadPort"].str.startswith("CN")), "Stowage"] = "DECK"
         return df
     
     @staticmethod
