@@ -11,3 +11,6 @@ tests/mock/test_output/referential
 tests/mock/*/simulations/*/in_preprocessing
 tests/mock/*/simulations/*/intermediate
 tests/mock/*/simulations/*/out
+
+# requirements.txt
+requirements.txt
