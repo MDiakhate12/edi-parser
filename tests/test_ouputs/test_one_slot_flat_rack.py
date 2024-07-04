@@ -5,12 +5,13 @@ from pandas.testing import assert_frame_equal
 from main import main, configure_logger
 from modules.main_layer import MainLayer
 from tests.utils import get_referential_files_from_s3
+from tests.test_ouputs.common import CommonTests
 pd.set_option('display.max_columns', None)
 import logging
 logging.basicConfig(level="DEBUG", format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-class TestOutputFlatRacksSimulation:
+class TestOutputOneSlotFlatRacksSimulation(CommonTests):
 
     # initialize mock data
     MOCK_DATA_PATH = f"{os.path.dirname(os.path.dirname(__file__))}/mock/test_output"
@@ -20,7 +21,7 @@ class TestOutputFlatRacksSimulation:
     OUTPUT_PATH = f"{SIMULATION_FOLDER_PATH}/out"
     EXPECTED_TEST_RESULTS_FOLDER_PATH = f"{SIMULATION_FOLDER_PATH}/expected"
     os.makedirs(EXPECTED_TEST_RESULTS_FOLDER_PATH, exist_ok=True)
-    EVENT_PREPROCESSING = dict(
+    EVENT = dict(
         vesselImo = "9454450",
         port = "CNSHK",
         description = "testscript",
@@ -43,23 +44,16 @@ class TestOutputFlatRacksSimulation:
     # initialize referential data
     if not os.path.exists(f"{MOCK_DATA_PATH}/referential"):
         get_referential_files_from_s3(local_simulation_folder=MOCK_DATA_PATH, environment="prd")
-
-    if not os.path.exists(f"{INTERMEDIATE_PATH}/containers.csv"):
-        main(EVENT_PREPROCESSING, enable_logging=True, log_level="DEBUG")
-
-    @pytest.fixture(scope="class")
-    def containers_csv(self) -> pd.DataFrame:
-        try:
-            if not os.path.exists(f"{self.INTERMEDIATE_PATH}/containers.csv"):
-                main(self.EVENT_PREPROCESSING, enable_logging=True, log_level="DEBUG")
-        except:
-            raise
-        else:
-            return pd.read_csv(f"{self.INTERMEDIATE_PATH}/containers.csv", sep=";")
     
     @pytest.fixture(scope="class")
     def equipment_mapping(self) -> pd.DataFrame:
-        return pd.read_csv(f"{self.INTERMEDIATE_PATH}/equipment_mapping.csv", sep=";")
+        try:
+            if not os.path.exists(f"{self.INTERMEDIATE_PATH}/equipment_mapping.csv"):
+                main(self.EVENT, enable_logging=True, log_level="DEBUG")
+        except:
+            raise
+        else:
+            return pd.read_csv(f"{self.INTERMEDIATE_PATH}/equipment_mapping.csv", sep=";")
     
     @pytest.fixture(scope="class")
     def simulation_output(self, containers_csv: pd.DataFrame) -> None:
@@ -95,7 +89,7 @@ class TestOutputFlatRacksSimulation:
 
         # run ungrouping logic
         ml = MainLayer(self.logger, self.EVENT_POSTPROCESSING, self.EVENT_POSTPROCESSING.get("reusePreviousResults", False))
-        df_containers_ungrouped = ml._handle_flat_racks_in_output()
+        df_containers_ungrouped = ml._handle_one_slot_flat_racks_in_output()
         df_containers_ungrouped = df_containers_ungrouped[df_containers_ungrouped["REAL_CONTAINER_ID"].isin(containers_in_groups)].reset_index(drop=True)
         df_containers_ungrouped["WEIGHT_KG"] = df_containers_ungrouped["WEIGHT_KG"].astype(float)
         df_containers_ungrouped["SLOT_POSITION"] = df_containers_ungrouped["SLOT_POSITION"].astype(int)
