@@ -417,7 +417,7 @@ class DG:
         return df_DG_loadlist
 
     def __merge_DG_loadlist_with_imdg_code(self, df_DG_loadlist:pd.DataFrame)->pd.DataFrame:
-        
+        # get inputs
         imdg_codes_df = self._imdg_haz_exis
         df_DG_loadlist['UN'] = df_DG_loadlist['UN'].astype(int).apply(lambda x: '{:04d}'.format(x))
         imdg_codes_df['UNNO'] = imdg_codes_df['UNNO'].astype(int).apply(lambda x: '{:04d}'.format(x))
@@ -430,28 +430,28 @@ class DG:
         imdg_codes_df.sort_values(by=['IMDG_AMENDMENT', 'CLASS', 'SUBLABEL1', 'SUBLABEL2', 'UNNO', 'PG'], inplace=True)
 
         # 1st merge
-        df_DG_loadlist = df_DG_loadlist.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
+        df_DG_loadlist_first_merge = df_DG_loadlist.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
                         how='left' ,left_on=['Ammendmant Version', 'Class', 'SubLabel1', 'SubLabel2','UN', 'PGr'], right_on= ['IMDG_AMENDMENT','CLASS','SUBLABEL1', 'SUBLABEL2','UNNO','PG'])
 
-        df_DG_loadlist['Stowage Category'] = df_DG_loadlist['STOWCAT']
+        df_DG_loadlist_first_merge['Stowage Category'] = df_DG_loadlist_first_merge['STOWCAT']
         
         
-        df_DG_loadlist = self.__filter_df_DG_loadlist(df_DG_loadlist)
+        df_DG_loadlist_first_merge = self.__filter_df_DG_loadlist(df_DG_loadlist_first_merge)
         
         
-        df_DG_loadlist.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
+        df_DG_loadlist_first_merge.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
                                                 "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight",
                                                 "PGr", "UN", "Stowage Category"], keep='first', inplace=True)
         
         
         # check and handle duplicates of same stowage category for DG matching a category from imdg code
         unmatched_condition = lambda df: df['Stowage Category'].isnull() | (df['Stowage Category'] == "")
-        df_matched = df_DG_loadlist.drop(df_DG_loadlist[unmatched_condition(df_DG_loadlist)].index.to_list())
+        df_matched = df_DG_loadlist_first_merge.drop(df_DG_loadlist_first_merge[unmatched_condition(df_DG_loadlist_first_merge)].index.to_list())
         df_matched = df_matched.reset_index(drop=True)
         
         
         # get DG Goods that did not match to any category from imdg code 
-        df_not_matched = df_DG_loadlist[unmatched_condition(df_DG_loadlist)]
+        df_not_matched = df_DG_loadlist_first_merge[unmatched_condition(df_DG_loadlist_first_merge)]
         df_not_matched = df_not_matched[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
         'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Limited Quantity',
         'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SetPoint', 'Package Goods', 'Stowage Category']]
@@ -469,43 +469,40 @@ class DG:
         df_not_matched.reset_index(drop=True)
         
         # Concat both dataframes
-        df_DG_loadlist = pd.concat([df_matched, df_not_matched],ignore_index=True) 
+        df_DG_loadlist_second_merge = pd.concat([df_matched, df_not_matched],ignore_index=True)
 
         # 2nd merge trial
         # check and handle duplicates of same stowage category for DG matching a category from imdg code
-        df_matched_second_merge = df_DG_loadlist.drop(df_DG_loadlist[unmatched_condition(df_DG_loadlist)].index.to_list())
-        df_not_matched_second_merge = df_DG_loadlist[unmatched_condition(df_DG_loadlist)]
+        df_matched_second_merge = df_DG_loadlist_second_merge.drop(df_DG_loadlist_second_merge[unmatched_condition(df_DG_loadlist_second_merge)].index.to_list())
+        df_not_matched_second_merge = df_DG_loadlist_second_merge[unmatched_condition(df_DG_loadlist_second_merge)]
         df_not_matched_second_merge = df_not_matched_second_merge[['Serial Number', 'Operator', 'POL', 'POD', 'Type', 'Closed Freight Container', 'Weight', 'Regulation Body', 'Ammendmant Version', 'UN',
             'Class', 'SubLabel1', 'SubLabel2', 'DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)', 'FlashPoints', 'Limited Quantity',
             'Marine Pollutant', 'PGr', 'Liquid', 'Solid', 'Flammable', 'Non-Flammable', 'Proper Shipping Name (Paragraph B of DOC)', 'SetPoint', 'Package Goods', 'Stowage Category']]
 
         # Perform another merge attempt on different conditions
-        df_not_matched_second_merge = df_not_matched_second_merge.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
+        df_DG_loadlist_third_merge = df_not_matched_second_merge.merge(imdg_codes_df[['PSN','STATE','LQ','CLASS','SUBLABEL1','SUBLABEL2','UNNO', 'IMDG_AMENDMENT','PG', 'STOWCAT','DGIES_STOW','DGIES_SEG','VARIATION']],
                             how='left' ,left_on=['Ammendmant Version','UN'], right_on= ['IMDG_AMENDMENT','UNNO'])
 
         # Update Stowage Category based on the second merge attempt
-        df_not_matched_second_merge['Stowage Category'] = df_not_matched_second_merge['STOWCAT']
-        df_not_matched_second_merge["PGr"] = df_not_matched_second_merge["PGr"].fillna(df_not_matched_second_merge["PG"])
+        df_DG_loadlist_third_merge['Stowage Category'] = df_DG_loadlist_third_merge['STOWCAT']
+        df_DG_loadlist_third_merge["PGr"] = df_DG_loadlist_third_merge["PGr"].fillna(df_DG_loadlist_third_merge["PG"])
         # Drop duplicates after the second merge
-        df_not_matched_second_merge.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
+        df_DG_loadlist_third_merge.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1",
                                                     "SubLabel2", "Proper Shipping Name (Paragraph B of DOC)", "Weight",
                                                     "PGr", "UN", "Stowage Category"], keep='first', inplace=True)
 
-        # Reset index
-        df_not_matched_second_merge.reset_index(drop=True, inplace=True)
+        # get only the lines where we have the stowage category info
+        df_matched_third_merge = df_DG_loadlist_third_merge.drop(df_DG_loadlist_third_merge[unmatched_condition(df_DG_loadlist_third_merge)].index.to_list())
 
-        # Concatenate both dataframes
-        df_DG_loadlist_final = pd.concat([df_matched_second_merge, df_not_matched_second_merge], ignore_index=True)
+        # Concatenate both dataframes, from second and third merges
+        df_DG_loadlist_final = pd.concat([df_matched_second_merge, df_matched_third_merge], ignore_index=True)
 
-        # # Reset index for the final DataFrame
-        df_DG_loadlist_final.reset_index(drop=True, inplace=True)
-
-
+        # final DG_loadlist
         df_copy1 = df_DG_loadlist_final.copy()
         df_copy1['Stowage Category'] = df_copy1['Stowage Category'].map(lambda x: str(x))
         df_copy1.reset_index(inplace= True, drop=True)
         
-        #Stowage Category order from most to least critical 
+        # Stowage Category order from most to least critical 
         sort_order= ["1", "2", "3", "4", "5", "A", "B", "C", "D", "E"]
         # Group By Serial Number and order in decreasing criticality
         df_copy1 = df_copy1\
@@ -519,13 +516,20 @@ class DG:
                 key=lambda y: [sort_order.index(v) for v in y],
                 ascending=True 
             )
-        # df_copy1.set_index("level_0", inplace=True)
-        # Keep first row which is most critical
         
+        # Keep first row which is most critical
         df_copy1.drop_duplicates(subset = ["Serial Number", "POL", "POD", "Class", "SubLabel1", "PGr", "UN"], keep='first', inplace=True)
-        df_DG_loadlist = df_copy1
-        df_DG_loadlist.reset_index(inplace=True)
-        return df_DG_loadlist
+        df_DG_loadlist_final = df_copy1
+        df_DG_loadlist_final.reset_index(inplace=True)
+
+        # log eventual data loss in DG loadlist and raise an error if rows have been added
+        no_deleted_rows = df_DG_loadlist.drop_duplicates(subset=["Serial Number", "POL", "POD", "Class", "SubLabel1", "PGr", "UN"]).shape[0] - df_DG_loadlist_final.shape[0]
+        perc_deleted_rows = (no_deleted_rows / df_DG_loadlist.shape[0]) * 100
+        if no_deleted_rows >= 0:
+            self.logger.warn(f"-> Getting the Stowage Category from referential/hz_imdg_exis_subs.csv led to the deletion of {no_deleted_rows} ({round(perc_deleted_rows, 2)}%) unique entities.")
+        else:
+            raise ValueError(f"Getting the Stowage Category from referential/hz_imdg_exis_subs.csv led to the creation of {abs(no_deleted_rows)} ({round(abs(perc_deleted_rows), 2)}%) new unique entities.")
+        return df_DG_loadlist_final
     
     def __process_stowage_and_segregation(self, df: pd.DataFrame) -> pd.DataFrame:
         """
