@@ -125,6 +125,7 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = f"{self.__static_in_dir}/costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  f"{self.__static_in_dir}/costs/fuelCosts.csv"
             self.__consumption = f"{self.__static_in_dir}/schedules_temp/conso_apiPreVsProdVsInterp.csv"
+            self.__asian_countries_path = f"{self.__static_in_dir}/asian_countries.csv"
 
         else:
             bucket_path = f"s3://{s3_bucket}"
@@ -137,6 +138,7 @@ class MainLayer():
             self.__stevedoring_RW_costs_path = "costs/booklet_stevedoring.csv"
             self.__fuel_costs_path =  "costs/fuelCosts.csv"
             self.__consumption = "schedules_temp/conso_apiPreVsProdVsInterp.csv"
+            self.__asian_countries_path = "asian_countries.csv"
 
         self.__dynamic_in_origin_dir = f"{simulation_dir}/in"
         self.__dynamic_in_dir = f"{simulation_dir}/in_preprocessing" 
@@ -1067,7 +1069,7 @@ class MainLayer():
         self.logger.info("Reading fuel_costs.csv file from referential cost folder...")
         fuel_costs_df = self.__DL.read_csv(self.__fuel_costs_path,  na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         fuel_data_dict = fuel_costs_df.set_index('FUEL_TYPE')['COST_USD'].to_dict()
-        asian_countries = self.__DL.read_csv(f"{self.__static_in_dir}/asian_countries.csv",  sep=",", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
+        asian_countries = self.__DL.read_csv(self.__asian_countries_path,  sep=",", na_values=DEFAULT_MISSING, s3_bucket=self.__s3_bucket_in)
         self.logger.info("Generating final rotation.csv...")
         
         rotations = rotation(self.logger, vessel, rotation_intermediate, l_dfs_rotation_containers, l_containers_folder_names, self.__d_seq_num_to_port_name, rotation_csv_maps, RW_costs, consumption_df, fuel_data_dict, l_POD_profile)
