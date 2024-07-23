@@ -2411,7 +2411,7 @@ class PreProcessingLayer():
         equipment_type_ranges = dict(std=[2.59, 2.74], hc=[2.89, 4.])
         df["equipment_height_type"] = df["Height"].fillna(0.).apply(lambda height: "" if height == 0. else [k for k, v in equipment_type_ranges.items() if (min(v) <= height <= max(v))][0])
         df["equipment_height_type_max"] = df["equipment_height_type"].apply(lambda x: equipment_type_ranges.get(x, [np.nan]*2)[1])
-        df["OOG_TOP_MEASURE"] = df["equipment_height_type_max"] - df["Height"]
+        df["OOG_TOP_MEASURE"] = (df["equipment_height_type_max"] - df["Height"]).fillna(0.)
         return df["OOG_TOP_MEASURE"]
     
     # TODO: to be done using data models
@@ -2503,7 +2503,7 @@ class PreProcessingLayer():
                 POL_nb=min,
                 Size=max,
                 Weight=sum,
-                Height=max,
+                Height=sum,
                 OOG_FORWARD=max,
                 OOG_AFTWARDS=max,
                 OOG_RIGHT=max,
