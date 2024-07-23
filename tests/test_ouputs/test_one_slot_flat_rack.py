@@ -10,8 +10,14 @@ import logging
 logging.basicConfig(level="DEBUG", format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-@pytest.fixture(scope="module", params=["one_slot_flat_rack", "one_slot_flat_rack_2"])
+@pytest.fixture(scope="module", params=["one_slot_flat_rack_1", "one_slot_flat_rack_2", "one_slot_flat_rack_3"])
 def sim_id(request: pytest.FixtureRequest):
+    """
+    Simulations characteristics description:
+    - one_slot_flat_rack_1: only one shared slot (2 containers)
+    - one_slot_flat_rack_2: 2 shared slots (2 containers)
+    - one_slot_flat_rack_3: 1 shared slots with 5 flat_racks
+    """
     return request.param
 
 class TestOutputOneSlotFlatRacksSimulation(CommonTests):
@@ -42,7 +48,7 @@ class TestOutputOneSlotFlatRacksSimulation(CommonTests):
         # get groups from containers.csv
         df_flat_racks_groups = containers_csv[containers_csv["Container"].str.startswith("DP")].reset_index(drop=True)
         df_flat_racks_groups.fillna('', inplace=True)
-        df_flat_racks_groups["Height"] = df_flat_racks_groups["Height"].astype(float)
+        df_flat_racks_groups["Height"] = df_flat_racks_groups["Height"].astype(str)
 
         # # expected results initialization: uncomment ONLY when a major change affects the expected output
         # df_flat_racks_groups.to_csv(f"{self.EXPECTED_TEST_RESULTS_FOLDER_PATH}/containers_flat_rack_grouping.csv", index=False)

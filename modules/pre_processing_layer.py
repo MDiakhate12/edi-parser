@@ -4,6 +4,7 @@ import re as re
 import logging
 from typing import Tuple
 from modules import common_helpers
+from functools import reduce
 
 class PreProcessingLayer():
     def __init__(self, AL: object) -> None:
@@ -2017,38 +2018,69 @@ class PreProcessingLayer():
             "LOC_147_ID"
         ]
         
-        oog_dynamic_cols = [
-            "EQD_DIM_5_LENGTH_MEASURE", "EQD_DIM_6_LENGTH_MEASURE", 
-            "EQD_DIM_7_WIDTH_MEASURE", "EQD_DIM_8_WIDTH_MEASURE", "EQD_DIM_13_HEIGHT_MEASURE"
+        dim_dynamic_cols = [
+            "EQD_DIM_5_LENGTH_MEASURE", # OOG front
+            "EQD_DIM_5_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_6_LENGTH_MEASURE", # OOG back
+            "EQD_DIM_6_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_7_WIDTH_MEASURE", # OOG right
+            "EQD_DIM_7_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_8_WIDTH_MEASURE", # OOG left
+            "EQD_DIM_8_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_13_HEIGHT_MEASURE", # OOG height
+            "EQD_DIM_13_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_1_HEIGHT_MEASURE", # BreakBulk height
+            "EQD_DIM_1_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_17_HEIGHT_MEASURE", # bundle of flat rack height
+            "EQD_DIM_17_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_18_HEIGHT_MEASURE", # Fix non standard height
+            "EQD_DIM_18_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_19_HEIGHT_MEASURE", # collapsed flat rack height
+            "EQD_DIM_19_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_20_HEIGHT_MEASURE", # actual height of flat rack with expandable end walls
+            "EQD_DIM_20_MEASUREMENT_UNIT_CODE",
+            "EQD_DIM_21_HEIGHT_MEASURE" # supporting equipment floor height
+            "EQD_DIM_21_MEASUREMENT_UNIT_CODE",
         ]
         
-        # filter colums
-        oog_dynamic_cols_present = [col for col in oog_dynamic_cols if col in df_all_containers.columns]
+        # filter columns
+        dim_dynamic_cols_present = [col for col in dim_dynamic_cols if col in df_all_containers.columns]
         handling_cols = [col for col in df_all_containers.columns if "HANDLING" in col or "HAN" in col]
         missing_static_columns = [col for col in static_columns if col not in df_all_containers.columns]
         if missing_static_columns:
             df_all_containers = df_all_containers.reindex(columns = df_all_containers.columns.tolist() + missing_static_columns)
-        columns_selected = static_columns + oog_dynamic_cols_present + handling_cols
-        
+        columns_selected = static_columns + dim_dynamic_cols_present + handling_cols
+
         df_combined_containers_filtered = df_all_containers[columns_selected]
         df_combined_containers_filtered = df_combined_containers_filtered.copy()
         df_combined_containers_filtered.rename(columns= containers_final_dict["column_names"], inplace=True)
         
-        
         return df_combined_containers_filtered
     
+    def __compute_eqd_total_height(self, df):
+
+        def get_height_in_meter(height, unit_code):
+            if unit_code == "CMT":
+                return float(height) / 100.
+            elif unit_code == "MMT":
+                return float(height) / 1000.
+            else:
+                return 0.
+
+        height_columns = [
+            "breakbulk_height", "flat_rack_bundle_height", "OOG_TOP", "non_standard_height", "collapsed_flat_rack_height",
+            "flat_rack_with_expandable_end_walls_height", "supporting_equipment_floor_height"
+        ]
+        height_columns = [col for col in height_columns if col in df.columns]
+
+        # convert each height column in meter
+        for col in height_columns:
+            df[col] = df.apply(lambda x: get_height_in_meter(x[col], x[f"{col}_unit_code"]), axis=1)
+        # sum all height columns
+        df["Height_m"] = df[height_columns].sum(axis=1)
+        return df.drop(columns=[f"{col}_unit_code" for col in height_columns])
+
     def __add_oog_combined_containers(self, df_combined_containers: pd.DataFrame) -> pd.DataFrame:
-        # Handle OOG_TOP_MEASURE
-        if "OOG_TOP" in df_combined_containers.columns:
-            df_combined_containers["OOG_TOP"].replace('', np.nan, inplace=True)
-            df_combined_containers["OOG_TOP"] = pd.to_numeric(df_combined_containers["OOG_TOP"], errors='coerce')
-            df_combined_containers["OOG_TOP_MEASURE"] = np.where(
-                df_combined_containers["OOG_TOP"].isnull(), 
-                0.0, 
-                df_combined_containers["OOG_TOP"] / 100
-            ).astype(float)
-        else:
-            df_combined_containers["OOG_TOP_MEASURE"] = 0.0
 
         # Handle OOG columns and convert them to integer
         oog_cols = ["OOG_FORWARD", "OOG_AFTWARDS", "OOG_RIGHT", "OOG_LEFT", "OOG_TOP"]
@@ -2062,11 +2094,11 @@ class PreProcessingLayer():
                 df_combined_containers[col].fillna(0, inplace=True)
 
                 # store measures for OOG_LEFT and OOG_RIGHT
-                if col in ["OOG_LEFT", "OOG_RIGHT"]:
+                if col in ["OOG_LEFT", "OOG_RIGHT", "OOG_TOP"]:
                     df_combined_containers[f"{col}_MEASURE"] = df_combined_containers[col]
                 
                 # convert OOG measures into booleans
-                df_combined_containers[col] = (df_combined_containers[col].astype(int) > 0).astype(int)
+                df_combined_containers[col] = (df_combined_containers[col].astype(float) > 0).astype(int)
             else:
                 df_combined_containers[col] = 0
                 
@@ -2388,7 +2420,6 @@ class PreProcessingLayer():
 
         df_exclusion = pd.merge(df_dg_exclusion, df_stacks, how='left', left_on=["Bay", "MacroTier"], right_on=["Bay", "MacroTier"])
         df_exclusion.drop(columns=["Bay", "MacroTier"], inplace=True)
-        #print(df_exclusion)
 
         df_exclusion["SubBay"] = df_exclusion["SubBay"].astype(str)
         df_exclusion = df_exclusion.groupby(["ContId", "LoadPort"]).agg({"SubBay" : ','.join}).reset_index()
@@ -2408,10 +2439,15 @@ class PreProcessingLayer():
     
     @staticmethod
     def __update_oog_top_measure_for_one_slot_flat_racks(df: pd.DataFrame) -> pd.Series:
-        equipment_type_ranges = dict(std=[2.59, 2.74], hc=[2.89, 4.])
-        df["equipment_height_type"] = df["Height"].fillna(0.).apply(lambda height: "" if height == 0. else [k for k, v in equipment_type_ranges.items() if (min(v) <= height <= max(v))][0])
-        df["equipment_height_type_max"] = df["equipment_height_type"].apply(lambda x: equipment_type_ranges.get(x, [np.nan]*2)[1])
-        df["OOG_TOP_MEASURE"] = (df["equipment_height_type_max"] - df["Height"]).fillna(0.)
+
+        def get_most_probable_max_height(height: float, height_types: dict=dict(std=2.591, hc=2.891)):
+            dist_to_std = height - height_types["std"]
+            dist_to_hc = height - height_types["hc"]
+            most_probable_type = "std" if (abs(dist_to_std) < abs(dist_to_hc)) else "hc"
+            return height_types.get(most_probable_type)
+
+        df["equipment_height_type_max"] = df["Height_m"].apply(lambda height: get_most_probable_max_height(height))
+        df["OOG_TOP_MEASURE"] = (df["equipment_height_type_max"] - df["Height_m"]).fillna(0.)
         return df["OOG_TOP_MEASURE"]
     
     # TODO: to be done using data models
@@ -2426,7 +2462,8 @@ class PreProcessingLayer():
                 POL_nb=int,
                 Size=int,
                 Weight=float,
-                Height=float,
+                Height=str,
+                Height_m=float,
                 OOG_FORWARD=int,
                 OOG_AFTWARDS=int,
                 OOG_RIGHT=int,
@@ -2485,7 +2522,7 @@ class PreProcessingLayer():
 
         if len(dup_slots) > 0:
             logger.info(f"Found multiple containers on following slot(s): {', '.join(dup_slots)}. Performing slot-based aggregations.")
-            # remove lines with duplicated slots from initial data
+            # remove lines without duplicated slots from initial data
             df = df[~df["Slot"].isin(dup_slots)]
 
             # get ports <-> ports number mapping
@@ -2503,7 +2540,8 @@ class PreProcessingLayer():
                 POL_nb=min,
                 Size=max,
                 Weight=sum,
-                Height=sum,
+                Height=max,
+                Height_m=sum,
                 OOG_FORWARD=max,
                 OOG_AFTWARDS=max,
                 OOG_RIGHT=max,
@@ -2606,6 +2644,7 @@ class PreProcessingLayer():
         df_copy = df_all_containers.copy()
 
         df_combined_containers_filtered = self.__extract_columns_combined_containers(df_copy, containers_final_dict)
+        df_combined_containers_filtered = self.__compute_eqd_total_height(df_combined_containers_filtered)
         df_combined_containers_filtered = self.__add_sizes_and_heights_to_df(df_combined_containers_filtered, d_iso_codes_map)
         df_combined_containers_filtered = self.__add_weights(df_combined_containers_filtered)
         df_combined_containers_filtered = self.__add_oog_combined_containers(df_combined_containers_filtered)
