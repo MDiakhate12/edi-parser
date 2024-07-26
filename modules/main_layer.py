@@ -17,6 +17,9 @@ from modules.rotation_layer import rotation
 from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
+from modules.restow_layer.main import RestowLayer
+
+
 DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
 if "" in DEFAULT_MISSING:
     DEFAULT_MISSING = DEFAULT_MISSING.remove("")
@@ -1167,13 +1170,33 @@ class MainLayer():
         stacks_csv_path = f"{self.__vessels_static_in_dir}/{stacks_csv_name}"
         df_stacks = self.__DL.read_csv(stacks_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
 
+        # loading subbays capacities
+        subbays_capacity_csv_name = "SubBays Capacities Extrait Prototype MP_IN.csv"
+        subbays_capacity_csv_path = f"{self.__vessels_static_in_dir}/{subbays_capacity_csv_name}"
+        df_subbays_capacity = self.__DL.read_csv(subbays_capacity_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+
         df_final_containers_csv_name = "containers.csv"
         df_container_groups_mapping_csv_name = "equipment_mapping.csv"
         df_final_containers, df_container_groups_mapping = self.__PL.get_df_containers_final(df_all_containers, df_containers_config, d_iso_codes_map, df_uslax, df_POL_POD_revenues, df_rotation_final, df_stacks, df_DG_loadlist, df_loadlist_exclusions, self.logger)
         df_final_containers_csv_path = f"{self.__py_scripts_out_dir}/{df_final_containers_csv_name}"
         df_container_groups_mapping_csv_path = f"{self.__py_scripts_out_dir}/{df_container_groups_mapping_csv_name}"
+
+        # compute restow dataframe
+        df_restow_csv_name = "restow.csv"
+        df_restow_csv_path = f"{self.__py_scripts_out_dir}/{df_restow_csv_name}"
+        self.logger.info("Computing restow dataframe...")
+
+        restow_layer = RestowLayer(self.logger)
+
+        df_restow = restow_layer.get_df_restow(
+            df_final_containers=df_final_containers, 
+            df_stacks_input=df_stacks, 
+            df_subbays_capacity_input=df_subbays_capacity,
+        )
+
         self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
         self.__DL.write_csv(df_container_groups_mapping, df_container_groups_mapping_csv_path, s3_bucket=self.__s3_bucket_out)
+        self.__DL.write_csv(df_restow, df_restow_csv_path, s3_bucket=self.__s3_bucket_out)
 
         self.__output_filled_subtanks(l_tanks_baplies_paths)
         self.logger.info("Preprocessing first Execution: Done...")

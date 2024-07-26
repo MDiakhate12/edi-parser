@@ -11,6 +11,11 @@ tests/mock/test_output/referential
 tests/mock/*/simulations/*/in_preprocessing
 tests/mock/*/simulations/*/intermediate
 tests/mock/*/simulations/*/out
+tests/**/*.DS_Store
 
 # requirements.txt
 requirements.txt
+
+# vscode and mac files/folders
+**/*.DS_Store
+.vscode
