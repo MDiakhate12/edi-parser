@@ -1,5 +1,6 @@
 include main.py
 include modules/*
+include modules/restow_layer/*
 exclude setup.py
 exclude MANIFEST.in
 exclude README.md
