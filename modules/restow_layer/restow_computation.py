@@ -377,9 +377,12 @@ class RestowComputation:
             [columns]
         )
 
-        df_restow["subbay_contains_cDG_1_7"] = df_restow["deck_subbay_contains_dangeourous_1_7"] | df_restow["hold_subbay_contains_dangeourous_1_7"]
-        df_restow["subbay_contains_oog_left"] = df_restow["deck_subbay_contains_oog_left"] | df_restow["hold_subbay_contains_oog_left"]
-        df_restow["subbay_contains_oog_right"] = df_restow["deck_subbay_contains_oog_right"] | df_restow["hold_subbay_contains_oog_right"]
+        df_restow["subbay_contains_cDG_1_7"] = (df_restow["deck_subbay_contains_dangeourous_1_7"] | df_restow["hold_subbay_contains_dangeourous_1_7"]).fillna(False).astype(int)
+        df_restow["subbay_contains_oog_left"] = (df_restow["deck_subbay_contains_oog_left"] | df_restow["hold_subbay_contains_oog_left"]).fillna(False).astype(int)
+        df_restow["subbay_contains_oog_right"] = (df_restow["deck_subbay_contains_oog_right"] | df_restow["hold_subbay_contains_oog_right"]).fillna(False).astype(int)
+
+        df_restow["deck_subbay_is_restowable"] = df_restow["deck_subbay_is_restowable"].fillna(False).astype(int)
+        df_restow["hold_subbay_is_restowable"] = df_restow["hold_subbay_is_restowable"].fillna(False).astype(int)
 
         df_restow.drop(
             columns=[
@@ -415,6 +418,6 @@ class RestowComputation:
 
         df_restow["is_restowable"] = (
             df_restow["hold_subbay_is_restowable"] & df_restow["deck_subbay_is_restowable"]
-        )
+        ).fillna(False).astype(int)
 
         return df_restow
