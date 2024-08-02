@@ -868,39 +868,43 @@ class MainLayer():
         self.__AL.validate_data(lashing_parameters_dict)
         self.__AL.check_if_errors()
         self.logger.info("*"*80)
-        # # Intialize worst cast files generation 
-        self.__service_code = lashing_parameters_dict[0]['service']
-        # # Check if service code exists in EDI referentials 
-        self.logger.info(f"Checking if {self.__service_code} is in service line EDI's referential folder...")
-        if self.__service_code in self.__DL.list_folders_in_path(f"{self.__Edi_static_in_dir}", self.__s3_bucket_in):
-            self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
-            if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
-                self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
-                EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
-                self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__error_log_path, self.__s3_bucket_in, self.__s3_bucket_out)
-                self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
 
-                # Check if all LoadLists exist after generation
-                for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
-                    baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
-                    folder_name_split = folder_name.split("_")
-                    call_id = "_".join(folder_name_split[-2:])
-                    loadlist_flag = 0
-                    for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
-                        if i <2:
-                            loadlist_flag = 1
-                        if i >= 2:
-                                if file_name == "LoadList.edi": 
-                                    loadlist_flag = 1
-                    self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
+        # TODO: DEPRECATED, to be removed
+        # # # Intialize worst cast files generation 
+        # self.__service_code = lashing_parameters_dict[0]['service']
+        # # # Check if service code exists in EDI referentials 
+        # self.logger.info(f"Checking if {self.__service_code} is in service line EDI's referential folder...")
+        # if self.__service_code in self.__DL.list_folders_in_path(f"{self.__Edi_static_in_dir}", self.__s3_bucket_in):
+        #     self.logger.info("Checking if all calls beyond call_01 have a LoadList.edi (if provided no need to generate worst case baplies for future ports)...")
+        #     if  self.__after_first_call_loadlist != max(self.__d_seq_num_to_port_name.keys()) -1:
+        #         self.logger.info(f"Generating Worst case scenario Baplie messages for future ports in rotation for service: {self.__service_code}...")
+        #         EDI_referential_path = f"{self.__Edi_static_in_dir}/{self.__service_code}"
+        #         self.__worst_case_baplies = worst_case_baplies(self.logger, self.__AL, self.__vessel_id, self.__simulation_id, EDI_referential_path, self.__dynamic_in_dir, self.__error_log_path, self.__s3_bucket_in, self.__s3_bucket_out)
+        #         self.__worst_case_baplies.generate_worst_case_baplie_loadlist()
+
+        #         # Check if all LoadLists exist after generation
+        #         for i, folder_name in enumerate(sorted(self.__DL.list_folders_in_path(self.__dynamic_in_dir, self.__s3_bucket_out))): 
+        #             baplies_dir = f"{self.__dynamic_in_dir}/{folder_name}"
+        #             folder_name_split = folder_name.split("_")
+        #             call_id = "_".join(folder_name_split[-2:])
+        #             loadlist_flag = 0
+        #             for file_name in self.__DL.list_files_in_path(baplies_dir, self.__s3_bucket_out):
+        #                 if i <2:
+        #                     loadlist_flag = 1
+        #                 if i >= 2:
+        #                         if file_name == "LoadList.edi": 
+        #                             loadlist_flag = 1
+        #             self.__AL.check_loadlist_beyond_first_call(loadlist_flag, call_id)
                     
-                self.__AL.check_if_errors()
-            else:
-                self.logger.info("LoadList.edi exists for all port calls in simulation folder...")
-            self.logger.info("*" * 80)
-        else:
-            self.logger.info(f"Service line {self.__service_code} not found in EDI referentials...")
-            self.logger.info("*" * 80)
+        #         self.__AL.check_if_errors()
+        #     else:
+        #         self.logger.info("LoadList.edi exists for all port calls in simulation folder...")
+        #     self.logger.info("*" * 80)
+        # else:
+        #     self.logger.info(f"Service line {self.__service_code} not found in EDI referentials...")
+        #     self.logger.info("*" * 80)
+
+
         # Intialize Vessel
         self.logger.info(f"Creating Vessel instance for vessel: {self.__vessel_id}")
         # vessel profile file in referentials
