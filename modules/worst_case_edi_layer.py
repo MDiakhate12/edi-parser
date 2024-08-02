@@ -270,11 +270,10 @@ class worst_case_baplies():
             simulation_input_path (str): Path to the simulation input folder.
             s3_bucket_out (str): S3 bucket name for the simulation input.
         """
-
         for i, call_number in enumerate(ref_port_index_list):
             if call_number is not None and sim_port_index_list[i] not in [0, 1]:
                 source_key = os.path.join(self.__referential_input, referential_folder_name[call_number])
-                destination_folder_key = [int(folder_name.split('_')[1])for folder_name in folder_names]
+                destination_folder_key = [int(folder_name.split('_')[1]) for folder_name in folder_names]
                 folder_name = folder_names[destination_folder_key.index(sim_port_index_list[i])]
                 destination_key = os.path.join(self.__simulation_input, folder_name)
                 files_in_ref_path = self._DL.list_files_in_path(source_key, self.__s3_bucket_ref)
