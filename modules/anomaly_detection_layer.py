@@ -603,7 +603,7 @@ class AnomalyDetectionLayer():
         l_weights = df_attributes["Weight"].tolist() # the list is already processed: no nans or empty strings (only zeros for no values)
         l_containers_ids = df_attributes["EQD_ID"].tolist()
         
-        criticity = "Error"
+        criticity = "Warning"
         message = self.__get_full_msg("with a weight less than 1 tonne or greater 100 tonnes")
         error_value = "TBD"
         for container_id, weight in list(zip(l_containers_ids, l_weights)):
