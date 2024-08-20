@@ -549,7 +549,7 @@ class Lashing():
             updated_df = updated_df.sort_values(['BAY', 'ROW', 'TIER'], ascending=True)
             # Group by 'BAY', 'ROW', 'TCG', and 'LCG' and aggregate the rest of the columns as a list
             grouped_df = updated_df.groupby(['BAY', 'ROW', 'TCG', 'LCG']).agg({
-                'TIER': [('Tiers in Stack', list), ('Maximum Tier', 'max'),('Minimum Tier Stack', 'min'), ('Nb in Stack', lambda x: ((max(x) - min(x))  / 2) + 1)],
+                'TIER': [('Tiers in Stack', list), ('Maximum Tier', 'max'),('Minimum Tier Stack', 'min'), ('Nb in Stack', lambda x: len(x))],
                 'HEIGHT': [('Height List', list), ('Stack Height', 'sum')],
                 'WEIGHT': [('Weight List', list), ('Total Weight', 'sum')],
                 'LENGTH': [('Length List', list)],
