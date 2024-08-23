@@ -304,7 +304,7 @@ class RestowComputation:
 
                 hold_subbay_is_restowable=(
                     "hold_stack_is_restowable",
-                    lambda x: x.any(),
+                    lambda x: x.all(),
                 ),
             )
             .reset_index()
