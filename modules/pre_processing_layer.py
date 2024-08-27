@@ -2100,7 +2100,11 @@ class PreProcessingLayer():
                 # convert OOG measures into booleans
                 df_combined_containers[col] = (df_combined_containers[col].astype(float) > 0).astype(int)
             else:
-                df_combined_containers[col] = 0
+                if col in ["OOG_LEFT", "OOG_RIGHT", "OOG_TOP"]:
+                    df_combined_containers[col] = 0
+                    df_combined_containers[f"{col}_MEASURE"] = df_combined_containers[col]
+                else:
+                    df_combined_containers[col] = 0
                 
         return df_combined_containers
     
