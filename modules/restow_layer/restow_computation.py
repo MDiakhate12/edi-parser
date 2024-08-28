@@ -46,7 +46,9 @@ class RestowComputation:
             "Size": "int",
         }
 
-        df_converted = df.astype(types_dict)
+        filled_float_types = {k: 0 for k in types_dict}
+
+        df_converted = df.fillna(filled_float_types).astype(types_dict)
 
         # Enrichissement du DataFrame pour préparer le calcul du restow
         self.logger.info("Enrichissement du DataFrame pour préparer le calcul du restow")
@@ -65,7 +67,7 @@ class RestowComputation:
             "WeightIfHeavyElseZero": lambda row: row["Weight"] * (row["cWeight"] == "H"),
 
             # Calcule le poids maximal de la sous-bay
-            "MaxWeightOfSubbay": lambda row: row["maxWeight20"] + 2 * row["maxWeight40"], # doit être <= 2 * maxWeight40
+            "MaxWeightOfSubbay": lambda row: 2 * row["maxWeight40"], # doit être <= 2 * maxWeight40
         }
 
         df_containers_enriched = self.enrich_with_utility_columns(
@@ -210,7 +212,7 @@ class RestowComputation:
 
         df_container_deck_grouped_by_subbay["deck_subbay_is_restowable"] = (
 
-            # La sous-baie sur le pont est redéployable si elle ne contient pas de marchandises dangereuses de classe 1 à 7
+            # La sous-baie sur le pont est restowable si elle ne contient pas de marchandises dangereuses de classe 1 ou 7
             (df_container_deck_grouped_by_subbay["deck_subbay_contains_dangeourous_1_7"] == False)
 
             # Et si elle ne contient pas de conteneurs hors gabarit à gauche
@@ -286,7 +288,7 @@ class RestowComputation:
                 # Poids maximum total supporté par la sous-baie de la cale
                 total_weight_loadable_on_hold=("MaxWeightOfSubbay", "first"),
 
-                # Capacité totale en EVP de la section de trappe
+                # Capacité totale en TEU de la section de trappe
                 teus_hatch_section_capacity=("teus_subbay_capacity", "first"),
 
                 hold_subbay_contains_dangeourous_1_7=(
@@ -370,7 +372,7 @@ class RestowComputation:
         df_restow = (
             df_container_hold_grouped_by_subbay.merge(
                 df_container_deck_grouped_by_subbay,
-                how="left",
+                how="outer",
                 on=["hatch_section"],
             )
             .reset_index()
@@ -408,6 +410,19 @@ class RestowComputation:
 
             return nb_containers_to_restow / nb_teus_to_gain_on_hold
 
+        int_columns = {
+            "nb_containers_on_deck": int,
+            "nb_containers_on_hold": int,
+            "nb_heavy_containers_on_hold": int,
+            "teus_heavy_containers_on_hold": int,
+            "nb_light_containers_on_hold": int,
+            "teus_light_containers_on_hold": int,
+            "teus_empty_on_hold": int,
+        }
+
+        filled_int_columns = {k: 0 for k in int_columns}
+
+        df_restow = df_restow.fillna(filled_int_columns).astype(int_columns)
         
         # Calcul du ratio de restowage des conteneurs lourds en cale
         df_restow["ratio_restow_heavy_hold"] = compute_ratio_restow_heavy_hold(df_restow)
