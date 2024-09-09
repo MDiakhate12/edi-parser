@@ -2482,7 +2482,7 @@ class PreProcessingLayer():
                 Type=str,
                 Stowage=str,
                 DGheated=bool,
-                Exclusion=float,
+                Exclusion=str,
                 cDG=str
             )
         )
