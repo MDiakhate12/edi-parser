@@ -1,0 +1,32 @@
+EDI parsing + containers.csv generation stats:
+
+Old preprocessing
+    other_files:
+        - anomaly_detection_layer.py: 1004 lines
+        - common_helpers.py: 200 lines
+        - data_layer: 937 lines
+        - enrichment_layer.py: 1701 lines
+        - main_layer.py: 1009 lines
+        - mapping_layer.py: 1059 lines
+        - preprocessing_layer.py: 2670 lines
+        - Total: 9580 lines 
+
+New preprocessing
+    edi_parsing:
+        - data_model/baplie_parsers.py: 184 lines
+        - data_model/baplie_segments.py: 103 lines
+        - data_model/baplie_segments_groups.py: 114 lines
+        - main.py: 91 lines
+        - parser.py: 121 lines
+        - utils/parsing_utils.py: 64 lines
+        - utils/python_utils.py: 36 lines
+        - Total: 713 lines
+
+    preprocessing_containers:
+        - computation_rules/functional_rules.py: 144 lines
+        - computation_rules/legacy_rules.py: 50 lines
+        - utils/pandas_utils.py: 62 lines
+        - utils/preprocessing_utils.py: 226 lines
+        - utils/referential_utils.py: 10 lines
+        - runner.py: 394 lines
+        - Total: 886 lines

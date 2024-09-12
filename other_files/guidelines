@@ -1,0 +1,6 @@
+always set default factory
+never define simple SegmentGroup type field if it can match multiple segments in the EDI
+If not sure if your segment field can have one or multiple values, set it to List[YourSegmentGroupType] or List[YourSegmentType]
+field regex of segment groups are built based on field names
+    consequence : alway define field names of a segment group with a name that matches the segment name (at least the 3 first characters of the field name, in upper case)
+segment group fields should always be one of these three type : List[AnySegmentGroupSubtype] List[AnySegmentSubtype] AnySegmentGroupSubtype or AnySegmentSubtype
