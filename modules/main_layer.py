@@ -18,6 +18,9 @@ from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
 from modules.restow_layer.main import RestowLayer
+from modules.edi_parsing.main import EDIParser, EDIInputType, EDISegmentsPattern
+from modules.edi_parsing.data_model import baplie_segments_groups
+from modules.preprocessing_containers.main import ContainersLayer
 
 
 DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
@@ -144,6 +147,7 @@ class MainLayer():
             self.__asian_countries_path = "asian_countries.csv"
 
         self.__dynamic_in_origin_dir = f"{simulation_dir}/in"
+        self.__dynamic_in_json_dir = f"{simulation_dir}/in_json"
         self.__dynamic_in_dir = f"{simulation_dir}/in_preprocessing" 
         self.__py_scripts_out_dir = f"{simulation_dir}/intermediate"
         self.__all_containers_csv_path = f"{self.__py_scripts_out_dir}/csv_combined_containers.csv"
@@ -841,6 +845,108 @@ class MainLayer():
 
     def __run_first_execution(self) -> None:
 
+        ### Refactored EDI parsing and containers.csv generation - start ###
+
+        # Load Referential data
+
+        # loading stacks
+        stacks_csv_path = f"{self.__vessels_static_in_dir}/Stacks Extrait Prototype MP_IN.csv"
+        ref_df_stacks = self.__DL.read_csv(stacks_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+
+        # loading imdg infos (dangerous goods)
+        hz_imdg_exis_subs_csv_path = f"{self.__static_in_dir}/hz_imdg_exis_subs.csv"
+        print("hz_imdg_exis_subs_csv_path", hz_imdg_exis_subs_csv_path)
+        ref_df_hz_imdg_exis_subs = self.__DL.read_csv(hz_imdg_exis_subs_csv_path, DEFAULT_MISSING, ",", self.__s3_bucket_in).astype(str)
+
+        # loading rotations
+        rotation_csv_path = f"{self.__dynamic_in_origin_dir}/rotation.csv"
+        ref_df_rotation = self.__DL.read_csv(rotation_csv_path, DEFAULT_MISSING, ";", self.__s3_bucket_in).astype(str)
+
+        # Parse EDI Files
+
+        # Parse OnBoard File
+        onboard_data = EDIParser.parse_edi_file(
+            edi_input_dir = self.__dynamic_in_origin_dir,
+            edi_input_type = EDIInputType.OnBoard,
+            segment_parser = baplie_segments_groups.LocationSegmentGroup,
+            segments_pattern = EDISegmentsPattern.LOC_147,
+        )
+
+        onboard_file_path = f"{self.__dynamic_in_json_dir}/{EDIInputType.OnBoard}.json"
+
+        self.__DL.write_json(
+            data = onboard_data,
+            file_path = onboard_file_path,
+            s3_bucket = self.__s3_bucket_out,
+        )
+
+
+        # Parse LoadList File
+        loadlist_data = EDIParser.parse_edi_file(
+            edi_input_dir = self.__dynamic_in_dir,
+            edi_input_type = EDIInputType.LoadList,
+            segment_parser = baplie_segments_groups.LocationSegmentGroup,
+            segments_pattern = EDISegmentsPattern.LOC_147,
+        )
+
+        loadlist_file_path = f"{self.__dynamic_in_json_dir}/{EDIInputType.LoadList}.json"
+
+        self.__DL.write_json(
+            data = loadlist_data,
+            file_path = loadlist_file_path,
+            s3_bucket = self.__s3_bucket_out,
+        )
+
+
+        # Parse Tank File
+        tank_data = EDIParser.parse_edi_file(
+            edi_input_dir = self.__dynamic_in_dir,
+            edi_input_type = EDIInputType.Tank,
+            segment_parser = baplie_segments_groups.TankSegmentGroup,
+            segments_pattern = EDISegmentsPattern.LOC_ZZZ,
+        )
+
+        tank_file_path = f"{self.__dynamic_in_json_dir}/{EDIInputType.Tank}.json"
+
+        self.__DL.write_json(
+            data = tank_data,
+            file_path = tank_file_path,
+            s3_bucket = self.__s3_bucket_out,
+        )
+
+
+        # Create containers.csv from onboard_data + loadlist_data
+
+        # Compute onboard data
+        df_onboard = ContainersLayer.compute_containers_from_edi_json_segments(
+            edi_json_data = onboard_data,
+            edi_input_type = EDIInputType.OnBoard,
+            df_stacks = ref_df_stacks,
+            df_hz_imdg_exis_subs = ref_df_hz_imdg_exis_subs,
+            df_rotation = ref_df_rotation,
+        )
+
+        # Compute loadlist data
+        df_loadlist = ContainersLayer.compute_containers_from_edi_json_segments(
+            edi_json_data = loadlist_data,
+            edi_input_type = EDIInputType.LoadList,
+            df_stacks = ref_df_stacks,
+            df_hz_imdg_exis_subs = ref_df_hz_imdg_exis_subs,
+            df_rotation = ref_df_rotation,
+        )
+
+        df_containers = pd.concat([df_onboard, df_loadlist])
+
+        df_containers_csv_path = f"{self.__py_scripts_out_dir}/containers.csv"
+
+        self.__DL.write_csv(
+            df = df_containers,
+            csv_path = df_containers_csv_path,
+            s3_bucket = self.__s3_bucket_out,
+        )
+
+        ### Refactored EDI parsing and containers.csv generation - end ###
+
         # get csv headers dict, list, and prefixes list present in the Baplie message
         self.logger.info("Reading csv_cols_segments_map from referential configuration folder...")
         d_csv_cols_to_segments_map = self.__DL.read_json(f"{self.__jsons_static_in_dir}/csv_cols_segments_map.json", s3_bucket=self.__s3_bucket_in)
@@ -1198,7 +1304,7 @@ class MainLayer():
             df_subbays_capacity_input=df_subbays_capacity,
         )
 
-        self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
+        # self.__DL.write_csv(df_final_containers, df_final_containers_csv_path, s3_bucket=self.__s3_bucket_out)
         self.__DL.write_csv(df_container_groups_mapping, df_container_groups_mapping_csv_path, s3_bucket=self.__s3_bucket_out)
         self.__DL.write_csv(df_restow, df_restow_csv_path, s3_bucket=self.__s3_bucket_out)
 

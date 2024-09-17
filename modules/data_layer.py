@@ -934,4 +934,27 @@ class DataLayer():
             
     #         s3.put_object(Body=(bytes(json.dumps(event).encode('UTF-8'))), Bucket=self.__s3_bucket, Key=json_path)
     #         #self.__write_file_to_s3(event, json_path)
-    
+
+
+    def write_json(self, data, file_path, s3_bucket):
+        # Convert Python dictionary to JSON string
+        json_data = json.dumps(data)
+
+        if self.__is_local:
+            directory = os.path.dirname(file_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory)
+
+            with open(file_path, "w+") as outfile:
+                json.dump(data, outfile, indent=2)
+                
+        else:
+            # Write JSON to S3
+            try:
+                self.__write_file_to_s3(
+                    file_content = json_data,
+                    file_path = file_path,
+                    s3_bucket = s3_bucket,
+                )
+            except Exception as e:
+                print(f"Error writing JSON to S3: {e}")
