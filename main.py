@@ -11,6 +11,8 @@ sys.path.insert(0, "/var/task/Pre-processing-CICD-1")
 from modules.aws_utils import log_to_s3, write_records_dynamoDB
 from modules.main_layer import MainLayer
 
+from logger_config import CustomLogger
+
 
 class CustomAdapter(logging.LoggerAdapter):
     """
@@ -162,7 +164,11 @@ def lambda_handler(event, context):
     global logger, s3_resource, dynamodb
     s3_resource = resource('s3')
     dynamodb = resource('dynamodb')
-    logger, list_handler = configure_logger(event["simulation_id"])
+    # logger, list_handler = configure_logger(event["simulation_id"])
+    custom_logger_config = CustomLogger(event["simulation_id"])
+    logger = custom_logger_config.logger 
+    list_handler = custom_logger_config.list_handler 
+
 
     table_dynamoDB = os.environ['DynamoDB_TABLE_NAME']
     bucket_data_name = os.environ['S3_BUCKET_NAME']
@@ -196,7 +202,11 @@ def main(event: dict=None, **kwargs):
     # configure logging
     if kwargs.get("enable_logging"):
         logging.basicConfig(level=kwargs.get("log_level"), format='%(asctime)s - %(levelname)s - %(message)s')
-    logger, list_handler= configure_logger(event["simulation_id"])
+    # logger, list_handler= configure_logger(event["simulation_id"])
+    custom_logger_config = CustomLogger(event["simulation_id"])
+    logger = custom_logger_config.logger 
+    list_handler = custom_logger_config.list_handler 
+
     
     # launch main layer
     try:

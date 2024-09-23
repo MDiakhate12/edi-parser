@@ -27,8 +27,9 @@ class EDIParser:
         edi_input_dir,
         edi_input_type,
         segment_parser,
-        segments_pattern
+        segments_pattern,
     ):
+        
         print(
         "edi_input_dir =", edi_input_dir,
         "edi_input_type =", edi_input_type,
