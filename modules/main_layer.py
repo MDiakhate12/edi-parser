@@ -5,6 +5,8 @@ import logging
 import random
 import string
 
+from pandas import json_normalize
+
 from modules.anomaly_detection_layer import AnomalyDetectionLayer as AL
 from modules.data_layer import DataLayer as DL
 from modules.mapping_layer import MappingLayer as ML
@@ -17,10 +19,13 @@ from modules.rotation_layer import rotation
 from modules.dg_layer import DG
 from modules.common_helpers import extract_as_dict
 
+from pandas import json_normalize
+
 from modules.restow_layer.main import RestowLayer
 from modules.edi_parsing.main import EDIParser, EDIInputType, EDISegmentsPattern
 from modules.edi_parsing.data_model import baplie_segments_groups
-from modules.preprocessing_containers.main import ContainersLayer
+from modules.containers_layer.main import ContainersLayer
+from modules.containers_layer.utils import pandas_utils
 
 
 DEFAULT_MISSING = pd._libs.parsers.STR_NA_VALUES
@@ -865,6 +870,9 @@ class MainLayer():
         # Parse EDI Files
 
         # Parse OnBoard File
+
+
+        print("Flatten input data")
         onboard_data = EDIParser.parse_edi_file(
             edi_input_dir = self.__dynamic_in_origin_dir,
             edi_input_type = EDIInputType.OnBoard,
@@ -917,9 +925,12 @@ class MainLayer():
 
         # Create containers.csv from onboard_data + loadlist_data
 
-        # Compute onboard data
-        df_onboard = ContainersLayer.compute_containers_from_edi_json_segments(
-            edi_json_data = onboard_data,
+        # Compute onboard data        
+        df_onboard_raw = json_normalize(onboard_data)
+        df_onboard_flatten = pandas_utils.recurive_flatten_and_explode(df_onboard_raw)
+
+        df_onboard = ContainersLayer.compute_containers(
+            df_flatten = df_onboard_flatten,
             edi_input_type = EDIInputType.OnBoard,
             df_stacks = ref_df_stacks,
             df_hz_imdg_exis_subs = ref_df_hz_imdg_exis_subs,
@@ -927,8 +938,11 @@ class MainLayer():
         )
 
         # Compute loadlist data
-        df_loadlist = ContainersLayer.compute_containers_from_edi_json_segments(
-            edi_json_data = loadlist_data,
+        df_loadlist_raw = json_normalize(loadlist_data)
+        df_loadlist_flatten = pandas_utils.recurive_flatten_and_explode(df_loadlist_raw)
+
+        df_loadlist = ContainersLayer.compute_containers(
+            df_flatten = df_loadlist_flatten,
             edi_input_type = EDIInputType.LoadList,
             df_stacks = ref_df_stacks,
             df_hz_imdg_exis_subs = ref_df_hz_imdg_exis_subs,

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from modules.preprocessing_containers.utils import pandas_utils
+from modules.containers_layer.utils import pandas_utils
 
 
 class common_helpers:

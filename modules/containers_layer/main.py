@@ -2,34 +2,22 @@ import numpy as np
 import pandas as pd
 from typing import List
 
-from pandas import json_normalize
+from modules.containers_layer.computation_rules import functional_rules, legacy_rules
 
-from modules.preprocessing_containers.computation_rules import functional_rules, legacy_rules
-
-from modules.preprocessing_containers.utils import pandas_utils, preprocessing_utils, referential_utils
+from modules.containers_layer.utils import pandas_utils, preprocessing_utils, referential_utils
 
 class ContainersLayer:
 
     @classmethod
-    def compute_containers_from_edi_json_segments(
+    def compute_containers(
         self,
-        edi_json_data: List[dict],
+        df_flatten: pd.DataFrame,
         edi_input_type: str,
         df_stacks: pd.DataFrame,
         df_hz_imdg_exis_subs: pd.DataFrame,
         df_rotation: pd.DataFrame,
     ):
-        # print(f"Running containers.csv generation for simulation {simulation} in environment {env} and input type {edi_input_type}...")    
         
-        df_stacks = preprocessing_utils.preprocessess_stack_data(df_stacks, stack_id_columns=["MacroBay", "Row", "MacroTier"])
-
-        print("Normalize input edi_json_data")
-        df = json_normalize(edi_json_data)
-
-        print("Flatten input data")
-        df_flatten = pandas_utils.recurive_flatten_and_explode(df)
-
-
         print("Define flatten input columns for json data")
         flatten_input_columns = {
             'EQD_CN.EQD.equipment_identification.equipment_identifier': "Container",
@@ -101,7 +89,11 @@ class ContainersLayer:
         df_flatten_clean.replace("", np.nan, inplace=True)
         df_flatten_clean.replace([None], np.nan, inplace=True)
 
+        # print(f"Running containers.csv generation for simulation {simulation} in environment {env} and input type {edi_input_type}...")    
+        
+        df_stacks = preprocessing_utils.preprocessess_stack_data(df_stacks, stack_id_columns=["MacroBay", "Row", "MacroTier"])
 
+ 
         print("Read containers data")
         df_containers = df_flatten_clean.reset_index(drop=True).copy()
 
