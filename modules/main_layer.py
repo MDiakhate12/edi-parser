@@ -959,6 +959,11 @@ class MainLayer():
             s3_bucket = self.__s3_bucket_out,
         )
 
+        # TODO
+        # Create tank file
+        df_tank_raw = json_normalize(tank_data)
+        df_tank_flatten = pandas_utils.recurive_flatten_and_explode(df_tank_raw)
+
         ### Refactored EDI parsing and containers.csv generation - end ###
 
         # get csv headers dict, list, and prefixes list present in the Baplie message
