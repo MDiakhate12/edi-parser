@@ -1,0 +1,8 @@
+FUEL_TYPE;COST_USD;DESC
+LS;548;low sulfur heavy fuel oil
+LG;500;liquified natural gas
+HS;525;high sulfur heavy fuel oil
+DO;872;diesel oil
+LD;879;low sulfur diesel oil
+VL;604;very low sulfur heavy fuel oil
+SL;623;ultra low sulfur heavy fuel oil

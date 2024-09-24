@@ -1,0 +1,13 @@
+{
+    "EQD": ["NAD", "MEA", "HAN", "DIM", "GDS", "FTX", "RFF"],
+
+    "LOC_GROUP8": ["TSR", "TDT"],
+
+    "TMP": ["RNG", "DTM"],
+
+    "EQA": ["NAD"],
+
+    "DGS": ["ATT", "MEA", "FTX"],
+
+    "CTA": ["COM"]
+}

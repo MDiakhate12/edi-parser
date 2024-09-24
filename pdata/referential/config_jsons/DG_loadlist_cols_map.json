@@ -1,0 +1,20 @@
+{
+    "EQD_ID": "Serial Number",
+    "EQD_NAD_CF_PARTY_ID": "Operator",
+    "LOC_9_LOCATION_ID": "POL",
+    "LOC_11_LOCATION_ID": "POD",
+    "EQD_SIZE_AND_TYPE_DESCRIPTION_CODE": "Type",
+    "Weight": "Weight",
+    "DGS_HAZARD_CODE_VERSION_ID": "Ammendmant Version",
+    "DGS_UNDG_ID": "UN",
+    "DGS_HAZARD_ID": "Class",
+    "DGS_DGS_SUB_LABEL1": "SubLabel1",
+    "DGS_DGS_SUB_LABEL2": "SubLabel2",
+    "DGS_FTX_FREE_TEXT_DESCRIPTION_CODE": "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)",
+    "DGS_PACKAGING_DANGER_LEVEL_CODE": "PGr",
+    "DGS_SHIPMENT_FLASHPOINT_DEGREE": "FlashPoints",
+    "DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE": "Limited Quantity",
+    "DGS_ATT_PSN_DETAIL_DESCRIPTION": "Proper Shipping Name (Paragraph B of DOC)",
+    "TMP_TEMPERATURE_DEGREE": "SetPoint"
+}
+

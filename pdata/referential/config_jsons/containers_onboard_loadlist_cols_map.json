@@ -1,0 +1,6 @@
+{
+    "EQD_ID": "ContId",
+    "LOC_9_LOCATION_ID": "LoadPort",
+    "LOC_11_LOCATION_ID": "DischPort",
+    "EQD_SIZE_AND_TYPE_DESCRIPTION_CODE": "Type"
+}

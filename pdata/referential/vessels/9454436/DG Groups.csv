@@ -1,0 +1,10 @@
+Exclusion Class \ Exclusion Zone (Hold & Deck);H.Z01;H.Z02;H.Z03;H.Z04;H.Z05;H.Z06;H.Z07;H.Z08;D-(B037,B038,B074,B094);D.(B037,B038);D.B074;D.B094
+PPP;P;P;P;P;P;P;P;P;P;P;P;P
+PP;P;P;P;P;P;P;P;P;P;P;X;P
+PX;P;P;P;P;P;P;X;X;P;P;P;P
+PX+;P;P;P;P;P;P;X;X;P;P;X;P
+XP;P;P;X;X;P;X;X;X;P;P;X;P
+XX-;X;X;X;X;X;X;X;X;P;P;P;P
+XX;X;X;X;X;X;X;X;X;P;P;X;P
+XX+;X;X;X;X;X;X;X;X;P;X;X;P
+XXX;X;X;X;X;X;X;X;X;X;X;X;X

@@ -1,0 +1,105 @@
+{
+    "DG_LOADLIST_SCHEMA": {
+        "EQD_ID": "Serial Number",
+        "EQD_NAD_CF_PARTY_ID": "Operator",
+        "LOC_9_LOCATION_ID": "POL",
+        "LOC_11_LOCATION_ID": "POD",
+        "DGS_REGULATIONS_CODE_": "Regulation Body",
+        "DGS_HAZARD_CODE_VERSION_ID_": "Ammendmant Version",
+        "EQD_SIZE_AND_TYPE_DESCRIPTION_CODE": "Type",
+        "DGS_MEA_AAA_MEASURE_": "Weight",
+        "DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_":"Weight_UOM",
+        "DGS_UNDG_ID_": "UN",
+        "DGS_HAZARD_ID_": "Class",
+        "DGS_DGS_SUB_LABEL1_": "SubLabel1",
+        "DGS_DGS_SUB_LABEL2_": "SubLabel2",
+        "DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_": "DG-Remark (SW5 = Mecanical Ventilated Space if U/D par.A DOC)",
+        "DGS_PACKAGING_DANGER_LEVEL_CODE_": "PGr",
+        "DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_": "State",
+        "DGS_SHIPMENT_FLASHPOINT_DEGREE_": "FlashPoints",
+        "DGS_MEASUREMENT_UNIT_CODE_":"FlashPoints_UOM",
+        "DGS_ATT_PSN_DETAIL_DESCRIPTION_": "Proper Shipping Name (Paragraph B of DOC)",
+        "TMP_TEMPERATURE_DEGREE": "SetPoint",
+        "TMP_TEMPERATURE_MEASUREMENT_UNIT_CODE":"SetPoint_UOM"
+    },
+
+"static_df_all_containers_cols" : ["EQD_ID","EQD_NAD_CF_PARTY_ID","LOC_9_LOCATION_ID",
+"LOC_11_LOCATION_ID","EQD_SIZE_AND_TYPE_DESCRIPTION_CODE", "TMP_TEMPERATURE_DEGREE","TMP_TEMPERATURE_MEASUREMENT_UNIT_CODE"],
+
+"dynamic_df_all_containers_col_prefixes" : ["DGS_REGULATIONS_CODE_","DGS_HAZARD_CODE_VERSION_ID_",
+"DGS_HAZARD_ID_","DGS_DGS_SUB_LABEL1_","DGS_DGS_SUB_LABEL2_",
+"DGS_UNDG_ID_","DGS_SHIPMENT_FLASHPOINT_DEGREE_","DGS_ATT_AGR_DETAIL_DESCRIPTION_CODE_",
+"DGS_MEASUREMENT_UNIT_CODE_", "DGS_PACKAGING_DANGER_LEVEL_CODE_",
+"DGS_ATT_PSN_DETAIL_DESCRIPTION_","DGS_ATT_QTY_DETAIL_DESCRIPTION_CODE_",
+"DGS_MEA_AAA_MEASURE_","DGS_MEA_AAA_MEASUREMENT_UNIT_CODE_",
+"DGS_FTX_FREE_TEXT_DESCRIPTION_CODE_","DGS_ATT_HAZ_DETAIL_DESCRIPTION_CODE_", "DGS_ATT_PSN_DETAIL_DESCRIPTION_CODE_"],
+
+"PACKAGING_GROUP": {
+    "1": "I",
+    "2": "II",
+    "3": "III"
+},
+
+"SEGREGATION_GROUP": {
+    "SGG1a": "Strong Acids",
+    "SGG1": "Acids",
+    "SGG2": "Ammonium Compounds",
+    "SGG3": "Bromates",
+    "SGG4": "Chlorates",
+    "SGG5": "Chlorites",
+    "SGG6": "Cyanides",
+    "SGG7": "Heavy metals and their salts (including their organometallic compounds)",
+    "SGG8": "Hypochlorites",
+    "SGG9": "Lead and its compounds",
+    "SGG10": "Liquid halogenated hydrocarbons",
+    "SGG11": "Mercury and mercury compounds",
+    "SGG12": "Nitrites and their mixtures",
+    "SGG13": "Perchlorates",
+    "SGG14": "Permanganates",
+    "SGG15": "Powdered metals",
+    "SGG16": "Peroxides",
+    "SGG17": "Azides",
+    "SGG18": "Alkalis"
+},
+
+"PORT_ZONE": {
+    "SGSIN": "ASIA",
+    "NLRTM": "EUROPE",
+    "KRPUS": "ASIA",
+    "GBSOU": "EUROPE",
+    "FRDKK": "EUROPE",
+    "ESALG": "EUROPE",
+    "DEHAM": "EUROPE",
+    "CNYTN": "ASIA",
+    "CNSHA": "ASIA",
+    "CNNGB": "ASIA", 
+    "MYPKG": "ASIA",
+    "CNTXG": "ASIA",
+    "VNVUT": "ASIA", 
+    "USCHS": "NORTH AMERICA",
+    "USLAX": "NORTH AMERICA",
+    "LKCMB": "ASIA",
+    "USOAK": "NORTH AMERICA",
+    "CAHAL": "NORTH AMERICA", 
+    "USNYC": "NORTH AMERICA",
+    "USSAV": "NORTH AMERICA",
+    "USORF": "NORTH AMERICA", 
+    "THLCH": "ASIA"
+}, 
+
+"FP_Threshold_Low" : "23",
+
+"FP_Threshold_High": "60", 
+
+"l_explosion_protect_IIB_T4" : [
+    "1038", "1040", "1041", "1135", "1153", "1171", "1172", "1184", "1185", "1188", "1189", "1604", "1605", "1952", "1962",
+    "2983", "3070", "3138", "3297", "3298", "3299", "3300", "1001", "3374", "1132", "1048", "1049", "1050", "1051", "1052",
+    "1053", "1614", "1740", "1966", "2014", "2015", "2034", "2186", "2197", "2202", "2984", "3149", "3294", "3468", "3471",
+    "3526"
+],
+
+"l_IMDG_Class_1_S" : [
+    "0131", "0376", "0044", "0193", "0105", "0345", "0405", "0500", "0174", "0507", "0513", "0373", "0454", "0366", "0445", "0173", "0012", "0070", "0432", "0368", "0481", "0506", "0441", "0456",
+     "0384", "0349", "0337", "0404", "0455", "0190", "0323", "0055", "0460", "0014", "0367", "0110"
+]
+}
